@@ -1,0 +1,47 @@
+# AIPS user number.
+aips_userno: 2001
+# AIPS experiment name.
+exp_name: BZ087A1
+# AIPS work disk.
+work_disk: 1
+# Directory for input fits files.
+# If multi files, use the name of the first file here, and name the files as .1, .2, ...
+fits_file: /data/aips_data/BZ087A/BZ087A1/bz087a1.idifits
+# Number of input fits files.
+ncount: 1
+# Directory for storing input/output files.
+workspace: /home/zjd/pt
+# Directory for storing ionex files.
+ionex_dir: /data/aips_data/ionex
+# Directory for storing eop files.
+eop_dir: /data/aips_data/files
+# Pre-defined source list to load or save.
+pre_def_file: BZ087A1-2001.yaml
+# Max recursion depth for ambiguity space search, 4-7 suggested.
+# Don't set a large number because the time complexity is O(n^3).
+max_depth: 5
+# Max angular velocity for phase plane rotation, 500-1200 suggested.
+# A smaller value will make the recursion run faster by pruning.
+# A larger value will make the recursion less possible to be trapped when the phase varies fast.
+# Please try different values for each case!
+max_ang_v: 900.
+# Minimum Z-axis value for the normal vector of the phase plane, 0.6-0.8 suggested.
+# This can avoid the plane to be too tilted.
+# A larger value will make the recursion run faster by pruning.
+min_z: 0.7
+# Factor for Kalman filter.
+# A smaller value will reduce the impact of outliers and increase Kalman filter phase delay.
+# 0.05~0.1 suggested for most cases.
+# If set <= 0., Kalman filtering will not be applied.
+kalman_factor: 0.08
+# Half window width for lowpass filter (moving average).
+# A larger value will smooth the time series more.
+# 3~6 suggested for most cases.
+# If set <= 0, lowpass filtering will not be applied.
+smo_half_window: 5
+# IMAGR cellsize.
+# Does not affect offset determination procedure.
+cellsize: 0.0005
+# IMAGR imsize.
+# Does not affect offset determination procedure.
+imsize: 128
