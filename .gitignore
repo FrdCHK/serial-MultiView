@@ -1,3 +1,5 @@
 !exp/.gitkeep
+!predef/.gitkeep
 exp/*
+predef/*
 .idea
