@@ -5,12 +5,10 @@ exp_name: BZ087A1
 # AIPS work disk.
 work_disk: 1
 # Directory for input fits files.
-# If multi files, use the name of the first file here, and name the files as .1, .2, ...
+# If multi files, rename the files as <name>.1, <name>.2, ... and put the name of the first file here
 fits_file: /data/aips_data/BZ087A/BZ087A1/bz087a1.idifits
 # Number of input fits files.
 ncount: 1
-# Directory for storing input/output files.
-workspace: /home/zjd/pt
 # Directory for storing ionex files.
 ionex_dir: /data/aips_data/ionex
 # Directory for storing eop files.
@@ -20,12 +18,12 @@ pre_def_file: BZ087A1-2001.yaml
 # Max recursion depth for ambiguity space search, 4-7 suggested.
 # Don't set a large number because the time complexity is O(n^3).
 max_depth: 5
-# Max angular velocity for phase plane rotation, 500-1200 suggested.
+# Max angular velocity for phase plane rotation, 500-1500 suggested.
 # A smaller value will make the recursion run faster by pruning.
 # A larger value will make the recursion less possible to be trapped when the phase varies fast.
 # Please try different values for each case!
 max_ang_v: 900.
-# Minimum Z-axis value for the normal vector of the phase plane, 0.6-0.8 suggested.
+# Minimum Z-axis value for the normal vector of the phase plane, 0.5-0.8 suggested.
 # This can avoid the plane to be too tilted.
 # A larger value will make the recursion run faster by pruning.
 min_z: 0.7
@@ -39,7 +37,7 @@ kalman_factor: 0.08
 # 3~6 suggested for most cases.
 # If set <= 0, lowpass filtering will not be applied.
 smo_half_window: 5
-# IMAGR cellsize.
+# IMAGR cellsize, unit: arcsecond.
 # Does not affect offset determination procedure.
 cellsize: 0.0005
 # IMAGR imsize.
