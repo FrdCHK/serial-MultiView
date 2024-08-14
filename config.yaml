@@ -31,12 +31,12 @@ min_z: 0.7
 # Factor for Kalman filter.
 # A smaller value will reduce the impact of outliers and increase Kalman filter phase delay.
 # 0.05~0.1 suggested for most cases.
-# If set <= 0., Kalman filtering will not be applied.
+# If set = 0., Kalman filtering will not be applied.
 kalman_factor: 0.08
 # Half window width for lowpass filter (moving average).
 # A larger value will smooth the time series more.
 # 3~6 suggested for most cases.
-# If set <= 0, lowpass filtering will not be applied.
+# If set = 0, lowpass filtering will not be applied.
 smo_half_window: 5
 # IMAGR cellsize, unit: arcsecond.
 # Does not affect offset determination procedure.

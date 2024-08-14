@@ -7,6 +7,8 @@ import copy
 import tkinter as tk
 from tkinter import font
 
+import numpy as np
+
 
 class ConfigWindow:
     def __init__(self, root, antenna, config):
@@ -62,7 +64,7 @@ class ConfigWindow:
 
         valid = True
         types = [int, float, float, float, int]
-        ranges = [[1, 10], [0., 10000.], [0., 1.], [0., 10.], [1, 20]]
+        ranges = [[1, 10], [0., 10000.], [0., 1.], [0, 10.], [0, 20]]
         out_entries = []
         for i, item in enumerate(self.entries):
             try:

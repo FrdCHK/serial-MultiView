@@ -340,7 +340,7 @@ class Antenna:
             accu[calsour_this] += selected_next['action'] * 2 * np.pi
 
             if i >= extend_length:
-                accu_index = self.original_data['t'] == data_extended.loc[i, 't'] and self.original_data['calsour'] == calsour_this
+                accu_index = (self.original_data['t'] == data_extended.loc[i, 't']) & (self.original_data['calsour'] == calsour_this)
                 self.accu_info.loc[accu_index] = accu[calsour_this]
 
             new_point = np.array([data_extended.loc[i, 'x'], data_extended.loc[i, 'y'],
