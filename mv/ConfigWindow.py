@@ -11,11 +11,14 @@ import numpy as np
 
 
 class ConfigWindow:
-    def __init__(self, root, antenna, config):
+    def __init__(self, root, antenna, config, default_config=None):
         self.root = root
         self.antenna = antenna
         self.config = config
-        self.config_bk = copy.deepcopy(config)
+        if default_config is None:
+            self.config_bk = copy.deepcopy(config)
+        else:
+            self.config_bk = copy.deepcopy(default_config)
 
         self.window = tk.Toplevel(root.root)
         self.window.title("CONFIG")

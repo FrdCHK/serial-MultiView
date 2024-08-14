@@ -13,6 +13,7 @@ class Gui:
         self.target = target
         self.antenna = antenna
         self.config = copy.deepcopy(config)
+        self.default_config = copy.deepcopy(config)
         self.target_relative_position = target_relative_position
         self.secondary_calibrators = secondary_calibrators
 
@@ -24,6 +25,7 @@ class Gui:
         self.root_window = mv.RootWindow(self.target, antenna, self.config)
         if mv_flag:
             self.root_window.load()
+            self.config_window = mv.ConfigWindow(self.root_window, antenna, self.config, self.default_config)
         self.config_window = mv.ConfigWindow(self.root_window, antenna, self.config)
         self.adjust_window = mv.AdjustWindow(self.root_window, antenna, self.config,
                                              target_relative_position, secondary_calibrators)
