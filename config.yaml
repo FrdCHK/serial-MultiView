@@ -17,7 +17,7 @@ eop_dir: /data/aips_data/files
 # The file is located under ./predef
 pre_def_file: BZ087A1-2001.yaml
 # Max recursion depth for ambiguity space search, 4-7 suggested.
-# Don't set a large number because the time complexity is O(n^3).
+# Don't set a large number because the time complexity is O(3^n).
 max_depth: 5
 # Max angular velocity for phase plane rotation, 500-1500 suggested.
 # A smaller value will make the recursion run faster by pruning.
