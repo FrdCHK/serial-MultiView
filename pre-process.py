@@ -373,7 +373,7 @@ if __name__ == "__main__":
                 if (user_input == 'Y') or (user_input == 'y'):
                     with open(os.path.join("./predef", config["pre_def_file"]), 'w') as predef_file:
                         yaml.safe_dump(predef, predef_file)
-                    print(f"\033[32mPre-defined source list {config["pre_def_file"]} saved!\033[0m")
+                    print(f"\033[32mPre-defined source list {config['pre_def_file']} saved!\033[0m")
                     break
                 elif (user_input == 'N') or (user_input == 'n') or (user_input == ''):
                     break
