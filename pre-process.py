@@ -34,7 +34,7 @@ if __name__ == "__main__":
     user_exp_dir = f"./exp/{config['exp_name']}-{config['aips_userno']}"
     if not os.path.exists(user_exp_dir):
         os.mkdir(user_exp_dir)
-        user_exp_config = {"aips_userno": 2001, "exp_name": config['exp_name'], "work_disk": 1,
+        user_exp_config = {"aips_userno": config['aips_userno'], "exp_name": config['exp_name'], "work_disk": 1,
                            "fits_file": "/data/aips_data/BZ087A/BZ087A1/bz087a1.idifits", "ncount": 1, "step": 0}
         with open(os.path.join(user_exp_dir, f"{config['exp_name']}-{config['aips_userno']}.yaml"),
                   'w') as user_exp_config_file:
@@ -51,7 +51,7 @@ if __name__ == "__main__":
     step_id = user_exp_config['step'] + 1  # start from which step
     step_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 99]
     steps = pd.DataFrame({"ID": step_list,
-                          "STEP": ["FITLD", "ACCOR", "APCAL", "PANG", "EOPS", "TECOR", "FRING (fringe finder)",
+                          "STEP": ["FITLD", "ACCOR", "APCAL", "PANG", "EOPS", "TECOR", "FRING (manual phase-cal)",
                                    "calibrator selection", "SPLAT", "FRING (calibrators)",
                                    "position offset", "SN export", "quit"]})
     print("\033[34m"+steps.to_string(index=False)+"\033[0m")
@@ -191,7 +191,7 @@ if __name__ == "__main__":
     if step_id < 7:
         tool.ionex_download(config["ionex_dir"], obs_date, obs_day_num)
         ptfunc.tecor(config['exp_name'], "UVDATA", 1, int(config['work_disk']),
-                     os.path.join(config["ionex_dir"], f"jplg{obs_doy:03d}0.{obs_year % 2000:02d}i"), 2, clv, clv+1)
+                     os.path.join(config["ionex_dir"], f"jplg{obs_doy:03d}0.{obs_year % 2000:02d}i"), obs_day_num, clv, clv+1)
         user_exp_config["step"] = 6
     clv += 1
 
@@ -327,7 +327,8 @@ if __name__ == "__main__":
                             break
                     if redo_flag:
                         continue
-                    selected_sources += parts
+                    # for cases that calibrators are NOT allowed to be selected multiple times
+                    # selected_sources += parts
                     for part in parts:
                         int_part = int(part)
                         calibrators.loc[calibrators.index.size] = (sources.loc[sources["ID"] == int_part]).iloc[0]
@@ -372,7 +373,7 @@ if __name__ == "__main__":
                 if (user_input == 'Y') or (user_input == 'y'):
                     with open(os.path.join("./predef", config["pre_def_file"]), 'w') as predef_file:
                         yaml.safe_dump(predef, predef_file)
-                    print(f"\033[32mPre-defined source list {predef_file} saved!\033[0m")
+                    print(f"\033[32mPre-defined source list {config["pre_def_file"]} saved!\033[0m")
                     break
                 elif (user_input == 'N') or (user_input == 'n') or (user_input == ''):
                     break

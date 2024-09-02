@@ -105,9 +105,23 @@ if __name__ == "__main__":
             if tv.exists():
                 tv.kill()
 
+            # whether run JMFIT
+            # TODO: test whether this module works
+            jmfit_flag = True
+            while True:
+                user_input = input(f"Do you want to run JMFIT for {row_i['NAME']}? (y/n, defaults to y):")
+                if (user_input == 'Y') or (user_input == 'y') or (user_input == ''):
+                    break
+                elif (user_input == 'N') or (user_input == 'n'):
+                    jmfit_flag = False
+                    break
+                else:
+                    print("\033[31mInvalid input!\033[0m")
+
             # JMFIT (PR)
-            jm_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-PR.jmfit")
-            ptfunc.jmfit(row_i['NAME'], "ICL001", 1, int(config['work_disk']), -3, 2, jm_dir)
+            if jmfit_flag:
+                jm_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-PR.jmfit")
+                ptfunc.jmfit(row_i['NAME'], "ICL001", 1, int(config['work_disk']), -3, 2, jm_dir)
 
             # FITTP (PR)
             img_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-PR.fits")
@@ -129,8 +143,11 @@ if __name__ == "__main__":
                 tv.kill()
 
             # JMFIT (MV)
-            jm_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-MV.jmfit")
-            ptfunc.jmfit(row_i['NAME'], "ICL001", 2, int(config['work_disk']), -3, 2, jm_dir)
+            if jmfit_flag:
+                jm_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-MV.jmfit")
+                ptfunc.jmfit(row_i['NAME'], "ICL001", 2, int(config['work_disk']), -3, 2, jm_dir)
+
+                tool.summary(user_exp_dir, row_i)
 
             # FITTP (MV)
             img_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-MV.fits")
@@ -139,7 +156,5 @@ if __name__ == "__main__":
         else:
             print(f"\033[33mYou have not run MultiView for target {row_i['NAME']}...\033[0m")
             sys.exit(0)
-
-    tool.summary(user_exp_dir, targets)
 
     print(f"\033[32mFinished!\033[0m")
