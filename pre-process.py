@@ -257,7 +257,7 @@ if __name__ == "__main__":
                 # pdb.set_trace()
                 target_config["PRIMARY_CALIBRATOR"] = primary_calibrator.to_dict()
 
-                print(f"\033[32mPre-defined source list {os.path.join('./predef', config['pre_def_file'])} loaded!\033[0m")
+                print(f"\033[32mPre-defined source list {os.path.join('./predef', config['pre_def_file'])} for {value['TARGET']} loaded!\033[0m")
 
                 with open(os.path.join(user_exp_dir, f"{target_config['ID']}-{target_config['NAME']}.yaml"),
                           'w') as target_config_file:
