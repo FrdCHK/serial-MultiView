@@ -15,3 +15,5 @@ from .is_float import is_float
 from .float_input import float_input
 from .relative_position import relative_position
 from .summary import summary
+from .cartesian_to_spherical import cartesian_to_spherical
+from .predict import predict

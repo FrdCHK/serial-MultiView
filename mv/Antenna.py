@@ -242,7 +242,7 @@ class Antenna:
         :param max_depth: max depth of recursion, defaults to 4
         :param max_ang_v: max angular velocity of plane rotation, controls the threshold for pruning, defaults to 864.
         :param min_z: minimum z value of normal vector, defaults to 0.67
-        :param weight: weight of the total rotation angle in recursion, defaults to 1.
+        :param weight: weight of the total rotation angle in path assessment, defaults to 1.
         :param filter_process_noise: Kalman filter process noise that controls smooth effect and filter phase delay, defaults to 0.08.
         """
         extend_length = 10
@@ -270,7 +270,13 @@ class Antenna:
             root_node.current = mv.recursion(data_extended, i, max_depth, norm_vec, accu, 0, ang_v, root_node, z_lim)
             root_node.plus = mv.recursion(data_extended, i, max_depth, norm_vec, accu, 1, ang_v, root_node, z_lim)
             root_node.minus = mv.recursion(data_extended, i, max_depth, norm_vec, accu, -1, ang_v, root_node, z_lim)
-            min_node, min_path = mv.find_min_leaf(root_node, norm_vec, weight)
+            norm_series = None
+            if i > 5:
+                norm_series = np.zeros((i, 4))
+                norm_series[:, 0] = data_extended.loc[:i-1, 't']
+                norm_series[:, 1:] = np.array(result)
+                norm_series = norm_series[-6:, :]
+            min_node, min_path = mv.find_min_leaf(norm_series, data_extended['t'], i, root_node, norm_vec, weight)
 
             if min_node is None:  # skip outliers (can't find any legal path)
                 result.append(norm_vec.flatten())
@@ -310,7 +316,7 @@ class Antenna:
         :param max_depth: max depth of recursion, defaults to 4
         :param max_ang_v: max angular velocity of plane rotation, controls the threshold for pruning, defaults to 864.
         :param min_z: minimum z value of normal vector, defaults to 0.67
-        :param weight: weight of the total rotation angle in recursion, defaults to 1.
+        :param weight: weight of the total rotation angle in path assessment, defaults to 1.
         """
         extend_length = 10
         data_extended = self._get_extended_data(extend_length)
@@ -329,7 +335,13 @@ class Antenna:
             root_node.current = mv.recursion(data_extended, i, max_depth, norm_vec, accu, 0, ang_v, root_node, z_lim)
             root_node.plus = mv.recursion(data_extended, i, max_depth, norm_vec, accu, 1, ang_v, root_node, z_lim)
             root_node.minus = mv.recursion(data_extended, i, max_depth, norm_vec, accu, -1, ang_v, root_node, z_lim)
-            min_node, min_path = mv.find_min_leaf(root_node, norm_vec, weight)
+            norm_series = None
+            if i > 5:
+                norm_series = np.zeros((i, 4))
+                norm_series[:, 0] = data_extended.loc[:i - 1, 't']
+                norm_series[:, 1:] = np.array(result)
+                norm_series = norm_series[-6:, :]
+            min_node, min_path = mv.find_min_leaf(norm_series, data_extended['t'], i, root_node, norm_vec, weight)
 
             if min_node is None:  # skip outliers (can't find any legal path)
                 result.append(norm_vec.flatten())

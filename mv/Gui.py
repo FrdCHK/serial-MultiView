@@ -18,8 +18,8 @@ class Gui:
         self.secondary_calibrators = secondary_calibrators
 
         # run mv with default settings
-        self.antenna.multiview(self.config['max_depth'], self.config['max_ang_v'], self.config['min_z'], 1.,
-                               self.config['kalman_factor'], self.config['smo_half_window'])
+        self.antenna.multiview(self.config['max_depth'], self.config['max_ang_v'], self.config['min_z'],
+                               self.config['weight'], self.config['kalman_factor'], self.config['smo_half_window'])
 
         # init windows
         self.root_window = mv.RootWindow(self.target, antenna, self.config)
