@@ -39,6 +39,8 @@ class Antenna:
 
         self.target_pos = None
 
+        self.reverse = False
+
     def multiview(self, max_depth=4, max_ang_v=864., min_z=0.67, weight=1., kalman_factor=None, smo_half_window=None):
         """
         MultiView function
@@ -199,14 +201,20 @@ class Antenna:
     def _get_extended_data(self, extend_length=10):
         """
         extend a small segment at the beginning of the time series using a reversed segment
+        reverse if self.reverse=True
         :param extend_length: length of the extended part of the time series, defaults to 10
         :return: extended time series
         """
         data_extended = self.data.copy(deep=True)
-        data_rev = data_extended.iloc[::-1, :]
+        data_rev = data_extended.iloc[::-1, :].copy(deep=True)
         t = data_extended['t'].copy(deep=True)
-        data_rev['t'] = -t + 2 * t.iloc[0]
-        data_extended = pd.concat([data_rev.iloc[-(extend_length + 1):-1], data_extended], axis=0)
+        if self.reverse:
+            # reversed version of t
+            data_rev['t'] = -t + 2 * t.iloc[-1]
+            data_extended = pd.concat([data_extended.iloc[-(extend_length + 1):-1], data_rev], axis=0)
+        else:
+            data_rev['t'] = -t + 2 * t.iloc[0]
+            data_extended = pd.concat([data_rev.iloc[-(extend_length + 1):-1], data_extended], axis=0)
         data_extended.reset_index(drop=True, inplace=True)
         return data_extended
 
@@ -287,7 +295,11 @@ class Antenna:
             accu[calsour_this] += selected_next['action'] * 2 * np.pi
 
             if i >= extend_length:
-                accu_index = (self.original_data['t'] == data_extended.loc[i, 't']) & (self.original_data['calsour'] == calsour_this)
+                if self.reverse:
+                    original_t = -(data_extended.loc[i, 't'] - 2*self.data['t'].iloc[-1])
+                else:
+                    original_t = data_extended.loc[i, 't']
+                accu_index = (self.original_data['t'] == original_t) & (self.original_data['calsour'] == calsour_this)
                 self.accu_info.loc[accu_index] = accu[calsour_this]
 
             # Kalman filter for bias
@@ -308,7 +320,10 @@ class Antenna:
             norm_vec = new_norm
 
         self.mv_result = np.array(result[extend_length:])
-        self.mv_t = np.array(data_extended['t'])[extend_length:]
+        if self.reverse:
+            self.mv_t = -(np.array(data_extended['t'])[extend_length:] - 2*self.data['t'].iloc[-1])
+        else:
+            self.mv_t = np.array(data_extended['t'])[extend_length:]
 
     def _mv_original(self, max_depth=4, max_ang_v=864., min_z=0.67, weight=1.):
         """
@@ -352,7 +367,11 @@ class Antenna:
             accu[calsour_this] += selected_next['action'] * 2 * np.pi
 
             if i >= extend_length:
-                accu_index = (self.original_data['t'] == data_extended.loc[i, 't']) & (self.original_data['calsour'] == calsour_this)
+                if self.reverse:
+                    original_t = -(data_extended.loc[i, 't'] - 2*self.data['t'].iloc[-1])
+                else:
+                    original_t = data_extended.loc[i, 't']
+                accu_index = (self.original_data['t'] == original_t) & (self.original_data['calsour'] == calsour_this)
                 self.accu_info.loc[accu_index] = accu[calsour_this]
 
             new_point = np.array([data_extended.loc[i, 'x'], data_extended.loc[i, 'y'],
@@ -367,4 +386,7 @@ class Antenna:
             norm_vec = new_norm
 
         self.mv_result = np.array(result[extend_length:])
-        self.mv_t = np.array(data_extended['t'])[extend_length:]
+        if self.reverse:
+            self.mv_t = -(np.array(data_extended['t'])[extend_length:] - 2 * self.data['t'].iloc[-1])
+        else:
+            self.mv_t = np.array(data_extended['t'])[extend_length:]

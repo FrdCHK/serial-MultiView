@@ -26,7 +26,8 @@ class Gui:
         if mv_flag:
             self.root_window.load()
             self.config_window = mv.ConfigWindow(self.root_window, antenna, self.config, self.default_config)
-        self.config_window = mv.ConfigWindow(self.root_window, antenna, self.config)
+        else:
+            self.config_window = mv.ConfigWindow(self.root_window, antenna, self.config)
         self.adjust_window = mv.AdjustWindow(self.root_window, antenna, self.config,
                                              target_relative_position, secondary_calibrators)
         self.root_window.config_window = self.config_window

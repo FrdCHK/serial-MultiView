@@ -20,8 +20,8 @@ class AdjustWindow:
 
         self.window = tk.Toplevel(root.root)
         self.window.title("ADJUST")
-        self.window.geometry("1320x850+600+60")
-        self.window.minsize(width=1320, height=850)
+        self.window.geometry("1320x890+600+60")
+        self.window.minsize(width=1320, height=890)
 
         self.window.grid_columnconfigure(0, weight=1)
         self.window.grid_rowconfigure(0, weight=2)
@@ -73,6 +73,12 @@ class AdjustWindow:
                                        variable=self.manual_toggle, command=self.on_manual_toggle)
         manual_toggle.pack(padx=5, pady=5)
 
+        # reverse toggle
+        self.reverse_toggle = tk.BooleanVar(value=False)
+        reverse_toggle = tk.Checkbutton(self.lower_frames[1], text="reverse", font=self.font,
+                                       variable=self.reverse_toggle, command=self.on_reverse_toggle)
+        reverse_toggle.pack(padx=5, pady=5)
+
         # calibrator select
         label_info = tk.Label(self.lower_frames[1], text="-- secondary calibrator selection --",
                               width=36, font=self.font, anchor="center")
@@ -119,6 +125,9 @@ class AdjustWindow:
             self.phase_plot_for_adjust()
         else:
             self.phase_plot()
+
+    def on_reverse_toggle(self):
+        self.antenna.reverse = self.reverse_toggle.get()
 
     def on_calibrator_toggle(self, num):
         """

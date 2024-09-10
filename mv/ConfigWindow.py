@@ -22,8 +22,8 @@ class ConfigWindow:
 
         self.window = tk.Toplevel(root.root)
         self.window.title("CONFIG")
-        self.window.geometry("600x250+0+660")
-        self.window.minsize(width=600, height=250)
+        self.window.geometry("600x290+0+660")
+        self.window.minsize(width=600, height=290)
 
         self.window.grid_columnconfigure(0, weight=1)
         self.window.grid_columnconfigure(1, weight=1)
@@ -31,7 +31,7 @@ class ConfigWindow:
 
         self.font = font.Font(family="Consolas", size=16)
 
-        self.labels = ["max_depth", "max_ang_v", "min_z", "kalman_factor", "smo_half_window"]
+        self.labels = ["max_depth", "max_ang_v", "min_z", "kalman_factor", "smo_half_window", "weight"]
         self.entries = []
         self.error_labels = []
 
@@ -66,8 +66,8 @@ class ConfigWindow:
         self.save_label.config(text="")
 
         valid = True
-        types = [int, float, float, float, int]
-        ranges = [[1, 10], [0., 10000.], [0., 1.], [0, 10.], [0, 20]]
+        types = [int, float, float, float, int, float]
+        ranges = [[1, 10], [0., 10000.], [0., 1.], [0, 10.], [0, 20], [0, 10]]
         out_entries = []
         for i, item in enumerate(self.entries):
             try:
