@@ -18,15 +18,22 @@ def predict(data, predict_time):
     sphere = []
     for i in range(vectors.shape[0]):
         t, p = tool.cartesian_to_spherical(vectors[i, 0], vectors[i, 1], vectors[i, 2])
-        sphere.append([t, p])
+        # convert phi to sin & cos to avoid jump close to 2pi
+        sin_phi = np.sin(np.radians(p))
+        cos_phi = np.cos(np.radians(p))
+        sphere.append([t, sin_phi, cos_phi])
     sphere = np.array(sphere)
 
     spline_t = UnivariateSpline(time_series, sphere[:, 0], k=1, ext=0)
-    spline_p = UnivariateSpline(time_series, sphere[:, 1], k=1, ext=0)
+    # spline_p = UnivariateSpline(time_series, sphere[:, 1], k=1, ext=0)
+    sin_spline_p = UnivariateSpline(time_series, sphere[:, 1], k=1, ext=0)
+    cos_spline_p = UnivariateSpline(time_series, sphere[:, 2], k=1, ext=0)
 
     # 预测给定时间点的向量
     t = spline_t(predict_time)
-    p = spline_p(predict_time)
+    sin_p = sin_spline_p(predict_time)
+    cos_p = cos_spline_p(predict_time)
+    p = np.arctan2(sin_p, cos_p)
     t = Angle(t, unit=u.rad).wrap_at(np.pi * u.rad)
     p = Angle(p, unit=u.rad).wrap_at(2 * np.pi * u.rad)
     x, y, z = np.sin(t) * np.cos(p), np.sin(t) * np.sin(p), np.cos(t)
