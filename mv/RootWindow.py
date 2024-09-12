@@ -77,7 +77,7 @@ class RootWindow:
 
         button_rerun = tk.Button(self.frames[2], text="rerun", font=self.font, command=self.rerun)
         button_rerun.grid(row=0, column=0, sticky="nsew", padx=30, pady=10)
-        button_finish = tk.Button(self.frames[2], text="finish", font=self.font, command=self.stop)
+        button_finish = tk.Button(self.frames[2], text="finish", font=self.font, command=self.finish)
         button_finish.grid(row=0, column=1, sticky="nsew", padx=30, pady=10)
 
         self.present_fig = None
@@ -86,8 +86,9 @@ class RootWindow:
     def run(self):
         self.root.mainloop()
 
-    def stop(self):
+    def finish(self):
         # save config and mv result
+        # NOTE: must run adjust_window.save before yaml dump to ensure reverse para to be saved
         self.adjust_window.save(self.adj_dir, os.path.join(self.mv_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}.csv"))
         with open(self.conf_dir, 'w') as f:
             yaml.safe_dump(self.config, f)
@@ -130,4 +131,6 @@ class RootWindow:
         for i, item in adjust_load.iterrows():
             self.antenna.adjust_info.loc[i] = item
         self.antenna.update_data()
+        if 'reverse' in config_load.keys():
+            self.antenna.reverse = config_load['reverse']
         self.rerun(False)

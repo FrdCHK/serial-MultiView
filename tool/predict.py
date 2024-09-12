@@ -12,6 +12,12 @@ import tool
 
 
 def predict(data, predict_time):
+    """
+    predict next normal vector according to previous time series slice
+    :param data: previous time series slice
+    :param predict_time: the time to be predicted
+    :return: predicted normal vector at given time
+    """
     time_series = data[:, 0]
     vectors = data[:, 1:]
 
@@ -28,7 +34,7 @@ def predict(data, predict_time):
     sin_spline_p = UnivariateSpline(time_series, sphere[:, 1], k=1, ext=0)
     cos_spline_p = UnivariateSpline(time_series, sphere[:, 2], k=1, ext=0)
 
-    # 预测给定时间点的向量
+    # predict
     t = spline_t(predict_time)
     sin_p = sin_spline_p(predict_time)
     cos_p = cos_spline_p(predict_time)
@@ -38,7 +44,7 @@ def predict(data, predict_time):
     x, y, z = np.sin(t) * np.cos(p), np.sin(t) * np.sin(p), np.cos(t)
     predicted_vector = np.array([x, y, z])[:, np.newaxis]
 
-    # 归一化，确保仍是单位向量
+    # normalize
     predicted_vector /= np.linalg.norm(predicted_vector)
 
     return predicted_vector

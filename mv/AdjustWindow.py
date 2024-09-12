@@ -74,7 +74,10 @@ class AdjustWindow:
         manual_toggle.pack(padx=5, pady=5)
 
         # reverse toggle
-        self.reverse_toggle = tk.BooleanVar(value=False)
+        if self.antenna.reverse:
+            self.reverse_toggle = tk.BooleanVar(value=True)
+        else:
+            self.reverse_toggle = tk.BooleanVar(value=False)
         reverse_toggle = tk.Checkbutton(self.lower_frames[1], text="reverse", font=self.font,
                                        variable=self.reverse_toggle, command=self.on_reverse_toggle)
         reverse_toggle.pack(padx=5, pady=5)
@@ -266,4 +269,5 @@ class AdjustWindow:
         self.present_position_fig = fig
 
     def save(self, adj_dir, mv_dir):
+        self.config['reverse'] = self.antenna.reverse
         self.antenna.save(adj_dir, mv_dir)

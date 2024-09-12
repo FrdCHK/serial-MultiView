@@ -24,7 +24,7 @@ class Gui:
         # init windows
         self.root_window = mv.RootWindow(self.target, antenna, self.config)
         if mv_flag:
-            self.root_window.load()
+            self.root_window.load()  # NOTE: must load before instantiating config and adjust windows
             self.config_window = mv.ConfigWindow(self.root_window, antenna, self.config, self.default_config)
         else:
             self.config_window = mv.ConfigWindow(self.root_window, antenna, self.config)
