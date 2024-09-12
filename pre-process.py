@@ -556,8 +556,9 @@ if __name__ == "__main__":
                     if cc_flag:
                         icl = AIPSImage(row_i['NAME'], "ICL001", int(config['work_disk']), 1)
                         cc_table = icl.table("AIPS CC", 0)
-                        rashift = cc_table[0]["deltax"]
-                        decshift = cc_table[0]["deltay"]
+                        # NOTE: unit in CC table is degree
+                        rashift = cc_table[0]["deltax"] * 3600
+                        decshift = cc_table[0]["deltay"] * 3600
                         target_config["RASHIFT"] = rashift
                         target_config["DECSHIFT"] = decshift
 
