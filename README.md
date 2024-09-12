@@ -25,7 +25,6 @@ _You don't need to strictly observe the sources in a conventional C1-C2-T-C3-C4-
 	* Scipy
     * Matplotlib
     * Astropy
-    * tqdm
     * pyyaml
     * pycurl
 
