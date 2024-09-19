@@ -157,4 +157,12 @@ if __name__ == "__main__":
             print(f"\033[33mYou have not run MultiView for target {row_i['NAME']}...\033[0m")
             sys.exit(0)
 
+    # TODO: generate RESET file
+    with open("./run/RESET.001", "w") as file:
+        file.write('$ please set $RUNFIL="dir to this file" first, and type version="RUNFIL" in AIPS before run RESET\n')
+        file.write(f'recat\nfor i=4 to 15;getn i;zap;end\ndefault extd;\ninclass "SPLAT";\ninseq 1;\nindisk {int(config["work_disk"])};\n')
+        for i, row_i in targets.iterrows():
+            file.write(f'inname "{row_i["NAME"]}";\ninext "sn";\nextd\ninext "cl";\nextd\n')
+    print(f"\033[32mRESET.001 generated!\033[0m")
+
     print(f"\033[32mFinished!\033[0m")
