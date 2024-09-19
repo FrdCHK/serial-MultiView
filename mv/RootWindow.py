@@ -133,4 +133,6 @@ class RootWindow:
         self.antenna.update_data()
         if 'reverse' in config_load.keys():
             self.antenna.reverse = config_load['reverse']
+        if 't_flag' in config_load.keys():
+            self.antenna.t_flag_info = config_load['t_flag']
         self.rerun(False)

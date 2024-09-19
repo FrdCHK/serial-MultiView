@@ -92,6 +92,20 @@ if __name__ == "__main__":
 
             # SPLIT (PR)
             ptfunc.split(row_i['NAME'], "SPLAT", 1, int(config['work_disk']), [row_i['NAME']], 2, [2, 0], 1)
+            # UVFLG
+            save_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-SAVE")
+            conf_files = tool.find_matching_files(save_dir, f"{row_i['ID']}-{row_i['NAME']}")
+            for item in conf_files:
+                conf_dir = os.path.join(save_dir, item[0])
+                with open(conf_dir, 'r') as an_conf_file:
+                    an_conf = yaml.safe_load(an_conf_file)
+                if 't_flag' not in an_conf.keys():
+                    continue
+                for timerange in an_conf['t_flag']:
+                    timerang = [0 for _ in range(8)]
+                    timerang[:4] = tool.float_to_time_components(timerange[0])
+                    timerang[4:] = tool.float_to_time_components(timerange[1])
+                    ptfunc.uvflg(row_i['NAME'], "SPLIT", 1, int(config['work_disk']), [item[1]], timerang)
 
             # IMAGR (PR)
             rashift = target_config["RASHIFT"]
@@ -129,6 +143,18 @@ if __name__ == "__main__":
 
             # SPLIT (MV)
             ptfunc.split(row_i['NAME'], "SPLAT", 1, int(config['work_disk']), [row_i['NAME']], 3, [2, 0], 2)
+            # UVFLG
+            for item in conf_files:
+                conf_dir = os.path.join(save_dir, item[0])
+                with open(conf_dir, 'r') as an_conf_file:
+                    an_conf = yaml.safe_load(an_conf_file)
+                if 't_flag' not in an_conf.keys():
+                    continue
+                for timerange in an_conf['t_flag']:
+                    timerang = [0 for _ in range(8)]
+                    timerang[:4] = tool.float_to_time_components(timerange[0])
+                    timerang[4:] = tool.float_to_time_components(timerange[1])
+                    ptfunc.uvflg(row_i['NAME'], "SPLIT", 2, int(config['work_disk']), [item[1]], timerang)
 
             # IMAGR (MV)
             rashift = target_config["RASHIFT"]
@@ -160,9 +186,9 @@ if __name__ == "__main__":
     # TODO: generate RESET file
     with open("./run/RESET.001", "w") as file:
         file.write('$ please set $RUNFIL="dir to this file" first, and type version="RUNFIL" in AIPS before run RESET\n')
-        file.write(f'recat\nfor i=4 to 15;getn i;zap;end\ndefault extd;\ninclass "SPLAT";\ninseq 1;\nindisk {int(config["work_disk"])};\n')
+        file.write(f"recat\nfor i=4 to 15;getn i;zap;end\ndefault extd;\ninclass 'SPLAT';\ninseq 1;\nindisk {int(config['work_disk'])};\n")
         for i, row_i in targets.iterrows():
-            file.write(f'inname "{row_i["NAME"]}";\ninext "sn";\nextd\ninext "cl";\nextd\n')
+            file.write(f"inname '{row_i['NAME']}';\ninext 'sn';\nextd\ninext 'cl';\nextd\n")
     print(f"\033[32mRESET.001 generated!\033[0m")
 
     print(f"\033[32mFinished!\033[0m")

@@ -18,3 +18,4 @@ from .imagr import imagr
 from .jmfit import jmfit
 from .fittp import fittp
 from .clcal_for_fring import clcal_for_fring
+from .uvflg import uvflg

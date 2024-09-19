@@ -30,6 +30,7 @@ class Antenna:
         self.secondary_calibrators = calibrators
         self.adjust_info = pd.DataFrame(data=np.zeros(shape=(self.original_data.index.size, 2)),
                                         columns=['flag', 'wrap']).astype({'flag': int, 'wrap': int})
+        self.t_flag_info = []
         self.mv_result = None
         self.mv_t = None
         # record accumulated wrap during auto mv procedure
@@ -84,6 +85,70 @@ class Antenna:
             raise ValueError('available modes are: flag, unflag')
         self.update_data()
 
+    def t_flag(self, timerange, mode='flag'):
+        """
+        flag or unflag data within given timerange
+        :param timerange: the timerange to flag / unflag
+        :param mode: flag / unflag
+        """
+        if mode == 'flag':
+            range_to_append = timerange
+            range_list = copy.deepcopy(self.t_flag_info)
+            loop_flag = True
+            while loop_flag:
+                loop_flag = False
+                for item in range_list:
+                    if item[0] < range_to_append[0] < range_to_append[1] < item[1]:
+                        return
+                    elif range_to_append[0] < item[0] < range_to_append[1] < item[1]:
+                        range_to_append[1] = item[1]
+                        range_list.remove(item)
+                        loop_flag = True
+                        break
+                    elif item[0] < range_to_append[0] < item[1] < range_to_append[1]:
+                        range_to_append[0] = item[0]
+                        range_list.remove(item)
+                        loop_flag = True
+                        break
+                    elif range_to_append[0] < item[0] < item[1] < range_to_append[1]:
+                        range_list.remove(item)
+                        loop_flag = True
+                        break
+            # no overlap anymore
+            range_list.append(range_to_append)
+            self.t_flag_info = range_list
+        elif mode == 'unflag':
+            range_to_remove = timerange
+            range_list = copy.deepcopy(self.t_flag_info)
+            loop_flag = True
+            while loop_flag:
+                loop_flag = False
+                for item in range_list:
+                    if item[0] < range_to_remove[0] < range_to_remove[1] < item[1]:
+                        range_list.append([item[0], range_to_remove[0]])
+                        range_list.append([range_to_remove[1], item[1]])
+                        range_list.remove(item)
+                        loop_flag = True
+                        break
+                    elif range_to_remove[0] < item[0] < range_to_remove[1] < item[1]:
+                        range_list.append([range_to_remove[1], item[1]])
+                        range_list.remove(item)
+                        loop_flag = True
+                        break
+                    elif item[0] < range_to_remove[0] < item[1] < range_to_remove[1]:
+                        range_list.append([item[0], range_to_remove[0]])
+                        range_list.remove(item)
+                        loop_flag = True
+                        break
+                    elif range_to_remove[0] < item[0] < item[1] < range_to_remove[1]:
+                        range_list.remove(item)
+                        loop_flag = True
+                        break
+            # no overlap anymore
+            self.t_flag_info = range_list
+        else:
+            raise ValueError('available modes are: flag, unflag')
+
     def wrap(self, timerange, calibrators, mode='+'):
         """
         manually wrap data within given timerange
@@ -108,6 +173,7 @@ class Antenna:
         """
         self.adjust_info.iloc[:, :] = 0
         self.data = self.original_data.copy(deep=True)
+        self.t_flag_info = []
         root.rerun()
 
     def plot_normal_vector(self):
@@ -166,6 +232,12 @@ class Antenna:
             y_max = np.pi
             y_min = -np.pi
             ax.set_ylim([y_min, y_max])
+
+        for item in self.t_flag_info:
+            y_lim = ax.get_ylim()
+            ax.fill_betweenx(y_lim, item[0], item[1], color='#FFB6C1', alpha=0.15)
+            ax.set_ylim(y_lim)
+
         ax.legend()
 
         return fig

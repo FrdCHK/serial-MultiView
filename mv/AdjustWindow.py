@@ -106,6 +106,7 @@ class AdjustWindow:
         self.lower_frames[2].grid_rowconfigure(0, weight=1)
         self.lower_frames[2].grid_rowconfigure(1, weight=1)
         self.lower_frames[2].grid_rowconfigure(2, weight=1)
+        self.lower_frames[2].grid_rowconfigure(3, weight=1)
 
         plus_button = tk.Button(self.lower_frames[2], height=2, width=10, text="+2\u03C0", font=self.font,
                                 command=lambda: self.on_wrap('+'))
@@ -119,9 +120,15 @@ class AdjustWindow:
         unflag_button = tk.Button(self.lower_frames[2], height=2, width=10, text="unflag", font=self.font,
                                 command=lambda: self.on_flag('unflag'))
         unflag_button.grid(row=1, column=1, padx=5, pady=5)
+        t_flag_button = tk.Button(self.lower_frames[2], height=2, width=10, text="T flag", font=self.font,
+                                command=lambda: self.on_t_flag('flag'))
+        t_flag_button.grid(row=2, column=0, padx=5, pady=5)
+        t_unflag_button = tk.Button(self.lower_frames[2], height=2, width=10, text="T unflag", font=self.font,
+                                command=lambda: self.on_t_flag('unflag'))
+        t_unflag_button.grid(row=2, column=1, padx=5, pady=5)
         reset_button = tk.Button(self.lower_frames[2], height=2, width=10, text="reset", font=self.font,
                                  command=self.on_reset)
-        reset_button.grid(row=2, column=0, padx=5, pady=5)
+        reset_button.grid(row=3, column=0, columnspan=2, padx=5, pady=5)
 
     def on_manual_toggle(self):
         if self.manual_toggle.get():
@@ -149,7 +156,7 @@ class AdjustWindow:
         :param event: the click event
         """
         if event.inaxes is not None:
-            x = event.xdata
+            x = float(event.xdata)
 
             if event.button == 1:
                 if self.red_line and x >= self.red_line.get_xdata()[0]:
@@ -193,10 +200,19 @@ class AdjustWindow:
     def on_flag(self, mode):
         """
         See Antenna.flag()
-        :param mode: flag / unflag
+        :param mode: flag / reset
         """
         if self.manual_toggle.get() and (self.timerange_start is not None) and (self.timerange_end is not None):
             self.antenna.flag([self.timerange_start, self.timerange_end], self.calibrator_adjust, mode)
+            self.phase_plot_for_adjust()
+
+    def on_t_flag(self, mode):
+        """
+        See Antenna.flag()
+        :param mode: flag / unflag
+        """
+        if self.manual_toggle.get() and (self.timerange_start is not None) and (self.timerange_end is not None):
+            self.antenna.t_flag([self.timerange_start, self.timerange_end], mode)
             self.phase_plot_for_adjust()
 
     def on_reset(self):
@@ -270,4 +286,6 @@ class AdjustWindow:
 
     def save(self, adj_dir, mv_dir):
         self.config['reverse'] = self.antenna.reverse
+        # print(self.antenna.t_flag_info)
+        self.config['t_flag'] = self.antenna.t_flag_info
         self.antenna.save(adj_dir, mv_dir)
