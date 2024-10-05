@@ -94,9 +94,11 @@ class RootWindow:
             yaml.safe_dump(self.config, f)
         # save figures
         self.present_fig.savefig(os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-VECTOR.png"), bbox_inches='tight')
+        self.present_fig.savefig(os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-VECTOR.pdf"), bbox_inches='tight')
         # self.present_fig.savefig(os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-VECTOR.eps"))
         self.adjust_window.phase_plot()
         self.adjust_window.present_phase_fig.savefig(os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-PHASE.png"), bbox_inches='tight')
+        self.adjust_window.present_phase_fig.savefig(os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-PHASE.pdf"), bbox_inches='tight')
         # self.adjust_window.present_phase_fig.savefig(os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-PHASE.eps"))
 
         self.root.destroy()
