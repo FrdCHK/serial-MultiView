@@ -207,8 +207,8 @@ if __name__ == "__main__":
         first_scan_end_time = nx_table[0]['time']+nx_table[0]['time_interval']/2+1e-3  # add extra ~1 min (unit: d)
         days, hours, minutes, seconds = tool.float_to_time_components(first_scan_end_time)
         ptfunc.fring(config['exp_name'], "UVDATA", 1, int(config['work_disk']), [fringe_finder_name],
-                     [0, 0, 0, 0, days, hours, minutes, seconds], refant, [2, 0, 0, 0, 0, 0, 4],
-                     [0, 0, 0, 0, 0, 0, 0, 0, -1], snv+1, clv, clv+1)
+                     [0, 0, 0, 0, days, hours, minutes, seconds], refant, [2, 0, 0, 0, 0, 0, 7],
+                     [0, 0, 0, 0, 0, 0, 0, 1, 0], snv+1, clv, clv+1)
         user_exp_config["step"] = 7
     snv += 1
     clv += 1
@@ -421,7 +421,7 @@ if __name__ == "__main__":
             cal = pd.DataFrame.from_dict(target_config["CALIBRATORS"])
             ptfunc.fring(row_i['NAME'], "SPLAT", 1, int(config['work_disk']),
                          [target_config["PRIMARY_CALIBRATOR"]["NAME"][0]], [0], refant,
-                         [2, 0, 1, 0, 0, 0, 4], [0], sn_splat+1, cl_splat, cl_splat+1)
+                         [2, 0, 1, 0, 0, 0, 7], [0], sn_splat+1, cl_splat, cl_splat+1)
             sn_splat += 1
             cl_splat += 1
             cal.loc[cal["NAME"] == target_config["PRIMARY_CALIBRATOR"]["NAME"][0], "SN"] = sn_splat
@@ -432,7 +432,7 @@ if __name__ == "__main__":
                     continue
                 ptfunc.fring_only(row_i['NAME'], "SPLAT", 1, int(config['work_disk']),
                                   [row_j['NAME']], [0], refant,
-                                  [2, 0, 1, 0, 1, 0, 4], [0, -1, -1], sn_splat+1, cl_splat)
+                                  [2, 0, 1, 0, 1, 0, 7], [0, -1, -1], sn_splat+1, cl_splat)
                 sn_splat += 1
                 cal.loc[cal["NAME"] == row_j['NAME'], "SN"] = sn_splat
 
