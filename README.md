@@ -18,11 +18,11 @@ _You don't need to strictly observe the sources in a conventional C1-C2-T-C3-C4-
 ### Environment
 * Although Python is cross-platform, AIPS and ParselTongue may not work perfectly on some platforms, so Linux is recommended (tested on CentOS 7);
 * Make sure you have correctly installed AIPS and ParselTongue 3;
-* The scripts have been tested under Python 3.9;
+* The scripts have been tested under Python 3.8;
 * Python packages required:
     * Numpy
     * Pandas
-	* Scipy
+    * Scipy
     * Matplotlib
     * Astropy
     * pyyaml
