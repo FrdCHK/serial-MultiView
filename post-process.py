@@ -107,6 +107,10 @@ if __name__ == "__main__":
                     timerang[4:] = tool.float_to_time_components(timerange[1])
                     ptfunc.uvflg(row_i['NAME'], "SPLIT", 1, int(config['work_disk']), [item[1]], timerang)
 
+            # save SPLIT to FITS
+            split_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-SPLIT-PR.fits")
+            ptfunc.fittp(row_i['NAME'], "SPLIT", 1, int(config['work_disk']), split_dir)
+
             # IMAGR (PR)
             rashift = target_config["RASHIFT"]
             decshift = target_config["DECSHIFT"]
@@ -155,6 +159,10 @@ if __name__ == "__main__":
                     timerang[:4] = tool.float_to_time_components(timerange[0])
                     timerang[4:] = tool.float_to_time_components(timerange[1])
                     ptfunc.uvflg(row_i['NAME'], "SPLIT", 2, int(config['work_disk']), [item[1]], timerang)
+
+            # save SPLIT to FITS
+            split_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-SPLIT-MV.fits")
+            ptfunc.fittp(row_i['NAME'], "SPLIT", 2, int(config['work_disk']), split_dir)
 
             # IMAGR (MV)
             rashift = target_config["RASHIFT"]
