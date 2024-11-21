@@ -18,11 +18,11 @@ _You don't need to strictly observe the sources in a conventional C1-C2-T-C3-C4-
 ### Environment
 * Although Python is cross-platform, AIPS and ParselTongue may not work perfectly on some platforms, so Linux is recommended (tested on CentOS 7);
 * Make sure you have correctly installed AIPS and ParselTongue 3;
-* The scripts have been tested under Python 3.9;
+* The scripts have been tested under Python 3.8;
 * Python packages required:
     * Numpy
     * Pandas
-	* Scipy
+    * Scipy
     * Matplotlib
     * Astropy
     * pyyaml
@@ -42,7 +42,7 @@ Configurations for the scripts. See the comments for each parameter in the examp
 
 * Calibrator selection:
     * You can select primary and secondary calibrators for each target in the procedure. Task POSSM can be run in an AIPSTV window (optional).
-    * For muiti-epoch observations, you can save the calibrator list and load it for other epochs.
+    * For multi-epoch observations, you can save the calibrator list and load it for other epochs.
 
 * Position offset:
     * The offset of the target phase centre is determined by repeatedly running task IMAGR. You can adjust the IMAGR parameters during this process and determine the offset automatically or manually.
@@ -79,3 +79,4 @@ Configurations for the scripts. See the comments for each parameter in the examp
 #### Coming soon ...
 * Add support to other VLBI networks.
 * Add support to Inverse MultiView.
+* Non-linear spacial structure model.
