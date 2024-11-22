@@ -3,6 +3,7 @@ main pipeline for serial-MultiView
 @Author: Jingdong Zhang
 @DATE  : 2024/7/15
 """
+# import pdb
 import yaml
 import sys
 import os
@@ -93,7 +94,7 @@ if __name__ == "__main__":
             if row_j['ID'] == user_exp_config["refant"]:
                 continue
             sn_antenna = sn_all.loc[sn_all['antenna'] == row_j['ID']]
-            if sn_antenna.empty:
+            if sn_antenna.shape[0] <= 10:  # to ensure enough data for extension
                 antennas_exclude.loc[antennas_exclude.index.size] = [row_j['ID'], row_j['NAME']]
                 continue
             sn_if0 = sn_antenna[['calsour', 'x', 'y', 't']].copy(deep=True)

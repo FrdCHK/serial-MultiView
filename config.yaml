@@ -40,7 +40,7 @@ kalman_factor: 0.08
 smo_half_window: 5
 # A larger value will tend to minimize rotation angle,
 # while a smaller value will tend to stay close to predicted value.
-# 0.3-0.5 suggested for most cases.
+# 0.3-0.7 suggested for most cases.
 weight: 0.4
 # IMAGR cellsize, unit: arcsecond.
 # Does not affect offset determination procedure.
