@@ -15,7 +15,7 @@ def clcal_for_fring(inname, inclass, inseq, indisk, calsour, sources, snver, gai
     clcal_task.indisk = indisk
     clcal_task.calsour[1:] = calsour
     clcal_task.sources[1:] = sources
-    clcal_task.opcode = "CALP"
+    clcal_task.opcode = "CALI"
     clcal_task.interpol = "AMBG"
     clcal_task.smotyp = "VLBI"
     clcal_task.samptype = "BOX"

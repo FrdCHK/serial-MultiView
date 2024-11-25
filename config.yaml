@@ -1,5 +1,5 @@
 # AIPS user number.
-aips_userno: 2103
+aips_userno: 2094
 # AIPS experiment name.
 exp_name: BZ087B1
 # AIPS work disk.
@@ -47,4 +47,5 @@ weight: 0.4
 cellsize: 0.0005
 # IMAGR imsize.
 # Does not affect offset determination procedure.
+# Max 128 for JMFIT.
 imsize: 128
