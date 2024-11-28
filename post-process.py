@@ -106,6 +106,10 @@ if __name__ == "__main__":
                     timerang[:4] = tool.float_to_time_components(timerange[0])
                     timerang[4:] = tool.float_to_time_components(timerange[1])
                     ptfunc.uvflg(row_i['NAME'], "SPLIT", 1, int(config['work_disk']), [item[1]], timerang)
+            # in a rare case, there may be <=10 SN points of excluded antennas, which should be flagged
+            if 'ANTENNAS_EXCLUDE' in target_config.keys():
+                for j, row_j in antennas_exclude.iterrows():
+                    ptfunc.uvflg(row_i['NAME'], "SPLIT", 1, int(config['work_disk']), [row_j["ID"]], [0 for _ in range(8)])
 
             # save SPLIT to FITS
             split_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-SPLIT-PR.fits")
@@ -137,8 +141,13 @@ if __name__ == "__main__":
 
             # JMFIT (PR)
             if jmfit_flag:
+                pr_jmfit_success_flag = True
                 jm_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-PR.jmfit")
-                ptfunc.jmfit(row_i['NAME'], "ICL001", 1, int(config['work_disk']), -3, 2, jm_dir)
+                try:
+                    ptfunc.jmfit(row_i['NAME'], "ICL001", 1, int(config['work_disk']), -3, 2, jm_dir)
+                except RuntimeError:
+                    pr_jmfit_success_flag = False
+                    print("\033[31mFailed to run JMFIT for PR!\033[0m")
 
             # FITTP (PR)
             img_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-PR.fits")
@@ -158,6 +167,10 @@ if __name__ == "__main__":
                     timerang[:4] = tool.float_to_time_components(timerange[0])
                     timerang[4:] = tool.float_to_time_components(timerange[1])
                     ptfunc.uvflg(row_i['NAME'], "SPLIT", 2, int(config['work_disk']), [item[1]], timerang)
+            # in a rare case, there may be <=10 SN points of excluded antennas, which should be flagged
+            if 'ANTENNAS_EXCLUDE' in target_config.keys():
+                for j, row_j in antennas_exclude.iterrows():
+                    ptfunc.uvflg(row_i['NAME'], "SPLIT", 2, int(config['work_disk']), [row_j["ID"]], [0 for _ in range(8)])
 
             # save SPLIT to FITS
             split_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-SPLIT-MV.fits")
@@ -177,10 +190,15 @@ if __name__ == "__main__":
 
             # JMFIT (MV)
             if jmfit_flag:
+                mv_jmfit_success_flag = True
                 jm_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-MV.jmfit")
-                ptfunc.jmfit(row_i['NAME'], "ICL001", 2, int(config['work_disk']), -3, 2, jm_dir)
+                try:
+                    ptfunc.jmfit(row_i['NAME'], "ICL001", 2, int(config['work_disk']), -3, 2, jm_dir)
+                except RuntimeError:
+                    mv_jmfit_success_flag = False
+                    print("\033[31mFailed to run JMFIT for MV!\033[0m")
 
-                tool.summary(user_exp_dir, row_i)
+                tool.summary(user_exp_dir, row_i, pr_jmfit_success_flag, mv_jmfit_success_flag)
 
             # FITTP (MV)
             img_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-MV.fits")

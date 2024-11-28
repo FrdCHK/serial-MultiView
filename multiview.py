@@ -89,7 +89,7 @@ if __name__ == "__main__":
         # instantiate antenna objects
         antenna_table = pd.DataFrame.from_dict(user_exp_config["antennas"])
         antennas = []
-        antennas_exclude = pd.DataFrame(columns=['ID', 'NAME'])  # mark the antennas with no data for this target
+        antennas_exclude = pd.DataFrame(columns=['ID', 'NAME'])  # mark the antennas with not enough data for this target
         for j, row_j in antenna_table.iterrows():
             if row_j['ID'] == user_exp_config["refant"]:
                 continue
