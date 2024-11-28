@@ -85,10 +85,12 @@ if __name__ == "__main__":
             print(f"\033[32mMultiView SN {mv_sn} for {target_config['NAME']} imported to AIPS!\033[0m")
 
             # CLCAL
+            # CL1: after prep. steps
             # CL2: primary calibrator FRING
-            # CL3: MV FRING
+            # CL3-(2+secondary calsour num): secondary calsour FRING
+            # CL(3+secondary calsour num): MV FRING
             ptfunc.clcal_for_fring(row_i['NAME'], "SPLAT", 1, int(config['work_disk']),
-                                   [target_config["PRIMARY_CALIBRATOR"]["NAME"][0]], [row_i['NAME']], mv_sn, 1, 3)
+                                   [target_config["PRIMARY_CALIBRATOR"]["NAME"][0]], [row_i['NAME']], mv_sn, 1, calibrators.index.size + 2)
 
             # SPLIT (PR)
             ptfunc.split(row_i['NAME'], "SPLAT", 1, int(config['work_disk']), [row_i['NAME']], 2, [2, 0], 1)
@@ -154,7 +156,7 @@ if __name__ == "__main__":
             ptfunc.fittp(row_i['NAME'], "ICL001", 1, int(config['work_disk']), img_dir)
 
             # SPLIT (MV)
-            ptfunc.split(row_i['NAME'], "SPLAT", 1, int(config['work_disk']), [row_i['NAME']], 3, [2, 0], 2)
+            ptfunc.split(row_i['NAME'], "SPLAT", 1, int(config['work_disk']), [row_i['NAME']], calibrators.index.size + 2, [2, 0], 2)
             # UVFLG
             for item in conf_files:
                 conf_dir = os.path.join(save_dir, item[0])

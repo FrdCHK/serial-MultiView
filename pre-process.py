@@ -29,6 +29,8 @@ if __name__ == "__main__":
         config = yaml.safe_load(config_file)
 
     AIPS.userno = config['aips_userno']
+    cellsize = float(config['cellsize'])
+    imsize = int(config['imsize'])
 
     # config file for user-exp
     user_exp_dir = f"./exp/{config['exp_name']}-{config['aips_userno']}"
@@ -425,6 +427,21 @@ if __name__ == "__main__":
             sn_splat += 1
             cl_splat += 1
             cal.loc[cal["NAME"] == target_config["PRIMARY_CALIBRATOR"]["NAME"][0], "SN"] = sn_splat
+            # SPLIT, IMAGR, and FITTP for primary calibrator
+            ptfunc.split(row_i['NAME'], "SPLAT", 1, int(config['work_disk']),
+                         [target_config["PRIMARY_CALIBRATOR"]["NAME"][0]], cl_splat, [2, 0], 1)
+            tv = AIPSTV.AIPSTV()
+            if not tv.exists():
+                tv.start()
+            ptfunc.imagr(target_config["PRIMARY_CALIBRATOR"]["NAME"][0], "SPLIT", 1, int(config['work_disk']),
+                         target_config["PRIMARY_CALIBRATOR"]["NAME"][0], cellsize, imsize, 500, -4, 0, 0, tv=tv)
+            if tv.exists():
+                tv.kill()
+            img_dir = os.path.join(user_exp_dir, f"{row_i['ID']}-{row_i['NAME']}-CALIBRATOR")
+            if not os.path.exists(img_dir):
+                os.mkdir(img_dir)
+            img_file = os.path.join(img_dir, f"PRIMARY-{target_config['PRIMARY_CALIBRATOR']['NAME'][0]}.fits")
+            ptfunc.fittp(target_config["PRIMARY_CALIBRATOR"]["NAME"][0], "ICL001", 1, int(config['work_disk']), img_file)
 
             # secondary calibrators
             for j, row_j in cal.iterrows():
@@ -432,9 +449,23 @@ if __name__ == "__main__":
                     continue
                 ptfunc.fring_only(row_i['NAME'], "SPLAT", 1, int(config['work_disk']),
                                   [row_j['NAME']], [0], refant,
-                                  [2, 0, 1, 0, 1, 0, 7], [0, -1, -1], sn_splat+1, cl_splat)
+                                  [2, 0, 1, 0, 1, 0, 7], [0, -1, -1], sn_splat+1, 2)
                 sn_splat += 1
                 cal.loc[cal["NAME"] == row_j['NAME'], "SN"] = sn_splat
+                # CLCAL, SPLIT, IMAGR, and FITTP for calibrator
+                ptfunc.clcal_for_fring(row_i['NAME'], "SPLAT", 1, int(config['work_disk']),
+                                       [row_j['NAME']], [row_j['NAME']], sn_splat, 2, cl_splat+1)
+                cl_splat += 1
+                ptfunc.split(row_i['NAME'], "SPLAT", 1, int(config['work_disk']), [row_j['NAME']], cl_splat, [2, 0], 1)
+                tv = AIPSTV.AIPSTV()
+                if not tv.exists():
+                    tv.start()
+                ptfunc.imagr(row_j['NAME'], "SPLIT", 1, int(config['work_disk']),
+                             row_j['NAME'], cellsize, imsize, 500, -4, 0, 0, tv=tv)
+                if tv.exists():
+                    tv.kill()
+                img_file = os.path.join(img_dir, f"SECONDARY-{row_j['NAME']}.fits")
+                ptfunc.fittp(row_j['NAME'], "ICL001", 1, int(config['work_disk']), img_file)
 
             # write SN version of each FRING result to target config files
             cal["SN"] = cal["SN"].astype(int)
