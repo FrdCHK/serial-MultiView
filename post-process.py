@@ -124,7 +124,6 @@ if __name__ == "__main__":
                 tv.kill()
 
             # whether run JMFIT
-            # TODO: test whether this module works
             jmfit_flag = True
             while True:
                 user_input = input(f"Do you want to run JMFIT for {row_i['NAME']}? (y/n, defaults to y):")

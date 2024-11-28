@@ -7,6 +7,8 @@ import os
 import yaml
 import pandas as pd
 import subprocess
+from AIPS import AIPS
+from AIPSData import AIPSUVData, AIPSImage
 
 
 if __name__ == "__main__":
@@ -31,12 +33,24 @@ if __name__ == "__main__":
     except subprocess.CalledProcessError as e:
         print(e)
 
-    # TODO: generate RESET file
-    with open("./run/RESET.001", "w") as file:
-        file.write("$ please set $RUNFIL='dir to this file' first, and type version='RUNFIL' in AIPS before run RESET\n")
-        file.write(f"recat\nfor i=4 to 15;getn i;zap;end\ndefault extd;\ninclass 'SPLAT';\ninseq 1;\nindisk {int(config['work_disk'])};\n")
-        for i, row_i in targets.iterrows():
-            file.write(f"inname '{row_i['NAME']}';\ninext 'sn';\nextd\ninext 'cl';\nextd\n")
-    print(f"\033[32mRESET.001 generated!\033[0m")
+    # remove tables and files in AIPS
+    AIPS.userno = config['aips_userno']
+    for i, row_i in targets.iterrows():
+        # check whether SPLIT, IBM001, and ICL001 exist, if so, delete them
+        for j in [1, 2]:  # PR and MV
+            split_uv = AIPSUVData(row_i['NAME'], "SPLIT", int(config['work_disk']), j)
+            if split_uv.exists():
+                split_uv.zap()
+            ibm = AIPSImage(row_i['NAME'], "IBM001", int(config['work_disk']), j)
+            if ibm.exists():
+                ibm.zap()
+            icl = AIPSImage(row_i['NAME'], "ICL001", int(config['work_disk']), j)
+            if icl.exists():
+                icl.zap()
+        # clear CL/SN in SPLAT
+        splat_uv = AIPSUVData(row_i['NAME'], "SPLAT", int(config['work_disk']), 1)
+        if splat_uv.exists():
+            splat_uv.zap_table("SN", 0)
+            splat_uv.zap_table("CL", 0)
 
-    print(f"\033[32mFinished, Please run RESET.001 in AIPS manually!\033[0m")
+    print(f"\033[32mFinished!\033[0m")
