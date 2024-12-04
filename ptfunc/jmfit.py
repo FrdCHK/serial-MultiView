@@ -7,12 +7,13 @@ from AIPS import AIPS
 from AIPSTask import AIPSTask
 
 
-def jmfit(inname, inclass, inseq, indisk, doprint, prtlev, fitout=None):
+def jmfit(inname, inclass, inseq, indisk, doprint, prtlev, fitout=None, niter=40):
     jmfit_task = AIPSTask('JMFIT')
     jmfit_task.inname = inname
     jmfit_task.inclass = inclass
     jmfit_task.inseq = inseq
     jmfit_task.indisk = indisk
+    jmfit_task.niter = niter
     jmfit_task.doprint = doprint
     jmfit_task.prtlev = prtlev
     if fitout is not None:
