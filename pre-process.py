@@ -8,6 +8,7 @@ import os
 import sys
 import math
 from datetime import datetime, timedelta
+from astropy.time import Time
 import pandas as pd
 import yaml
 from AIPS import AIPS
@@ -121,10 +122,14 @@ if __name__ == "__main__":
     user_exp_config["sources"] = sources.to_dict()
     obs_date = data.header.date_obs
     obs_date = datetime.strptime(obs_date, "%Y-%m-%d")
+    jd_0 = Time(obs_date).jd  # julian day
     user_exp_config["obs_date"] = obs_date
     obs_year = obs_date.year  # obs year
     obs_doy = obs_date.timetuple().tm_yday  # day of year (first day of obs)
     nx_table = data.table('AIPS NX', 0)
+    nx_df = pd.DataFrame(columns=["time", "time_interval", "source_id"])
+    for item in nx_table:
+        nx_df.loc[nx_df.index.size] = [item["time"], item["time_interval"], item["source_id"]]
     obs_day_num = int(nx_table[len(nx_table) - 1]['time'] + 1)  # obs day number
     user_exp_config["obs_day_num"] = obs_day_num
 
@@ -259,6 +264,13 @@ if __name__ == "__main__":
                 # pdb.set_trace()
                 target_config["PRIMARY_CALIBRATOR"] = primary_calibrator.to_dict()
 
+                # epoch for target
+                nx_target = nx_df[nx_df["source_id"]==int(targets.loc[key, "ID"])].copy(deep=True)
+                nx_target.reset_index(drop=True, inplace=True)
+                scan_first = nx_target.at[0, 'time']
+                scan_last = nx_target.at[nx_target.index[-1], 'time']
+                target_config["EPOCH"] = float(Time(jd_0+(scan_last+scan_first)/2, format='jd').jyear)
+
                 print(f"\033[32mPre-defined source list {os.path.join('./predef', config['pre_def_file'])} for {value['TARGET']} loaded!\033[0m")
 
                 with open(os.path.join(user_exp_dir, f"{target_config['ID']}-{target_config['NAME']}.yaml"),
@@ -306,6 +318,14 @@ if __name__ == "__main__":
                 # config files for each target
                 target_config = {"ID": int(targets.loc[i, "ID"]), "NAME": str(targets.loc[i, "NAME"]),
                                  "RA": float(targets.loc[i, "RA"]), "DEC": float(targets.loc[i, "DEC"])}
+
+                # epoch for target
+                nx_target = nx_df[nx_df["source_id"]==int(targets.loc[i, "ID"])].copy(deep=True)
+                nx_target.reset_index(drop=True, inplace=True)
+                scan_first = nx_target.at[0, 'time']
+                scan_last = nx_target.at[nx_target.index[-1], 'time']
+                target_config["EPOCH"] = float(Time(jd_0+(scan_last+scan_first)/2, format='jd').jyear)
+
                 # select calibrators for each target
                 calibrators = pd.DataFrame(columns=["ID", "NAME", "RA", "DEC"])
                 while True:
