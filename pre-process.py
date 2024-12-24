@@ -178,7 +178,7 @@ if __name__ == "__main__":
         else:
             eop_try_open.close()
             eop_last_date = datetime.strptime(tool.eop_last_date(eop_full_dir), "%Y.%m.%d")
-            obs_last_date = obs_date + timedelta(days=(obs_day_num-1))
+            obs_last_date = obs_date + timedelta(days=(obs_day_num-1+3))  # AIPS requires real data in EOP file cover obs_date+3
             if eop_last_date < obs_last_date:
                 print("EOP file needs to be updated...")
                 os.remove(eop_full_dir)
