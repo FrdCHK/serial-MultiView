@@ -30,14 +30,28 @@ def predict(data, predict_time):
         sphere.append([t, sin_phi, cos_phi])
     sphere = np.array(sphere)
 
-    spline_t = UnivariateSpline(time_series, sphere[:, 0], k=1, ext=0)
-    sin_spline_p = UnivariateSpline(time_series, sphere[:, 1], k=1, ext=0)
-    cos_spline_p = UnivariateSpline(time_series, sphere[:, 2], k=1, ext=0)
+    # spline extrapolation
+    # spline_t = UnivariateSpline(time_series, sphere[:, 0], k=1, ext=0)
+    # sin_spline_p = UnivariateSpline(time_series, sphere[:, 1], k=1, ext=0)
+    # cos_spline_p = UnivariateSpline(time_series, sphere[:, 2], k=1, ext=0)
+    # t = spline_t(predict_time)
+    # sin_p = sin_spline_p(predict_time)
+    # cos_p = cos_spline_p(predict_time)
 
-    # predict
-    t = spline_t(predict_time)
-    sin_p = sin_spline_p(predict_time)
-    cos_p = cos_spline_p(predict_time)
+    # linear polyfit extrapolation with last four points
+    last = sphere[-4:, 0]
+    coef = np.polyfit(time_series[-4:], last, 1)
+    linear_extrapolation = np.poly1d(coef)
+    t = linear_extrapolation(predict_time)
+    last = sphere[-4:, 1]
+    coef = np.polyfit(time_series[-4:], last, 1)
+    linear_extrapolation = np.poly1d(coef)
+    sin_p = linear_extrapolation(predict_time)
+    last = sphere[-4:, 2]
+    coef = np.polyfit(time_series[-4:], last, 1)
+    linear_extrapolation = np.poly1d(coef)
+    cos_p = linear_extrapolation(predict_time)
+
     p = np.arctan2(sin_p, cos_p)
     t = Angle(t, unit=u.rad).wrap_at(np.pi * u.rad)
     p = Angle(p, unit=u.rad).wrap_at(2 * np.pi * u.rad)
