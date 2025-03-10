@@ -356,7 +356,7 @@ class Antenna:
                 norm_series[:, 0] = data_extended.loc[:i-1, 't']
                 norm_series[:, 1:] = np.array(result)
                 norm_series = norm_series[-6:, :]
-            min_node, min_path = mv.find_min_leaf(norm_series, data_extended['t'], i, root_node, norm_vec, weight)
+            min_node, min_path = mv.find_min_leaf(norm_series, data_extended['t'], i, root_node, norm_vec, weight, (max_depth, max_ang_v, min_z))
 
             if min_node is None:  # skip outliers (can't find any legal path)
                 result.append(norm_vec.flatten())
@@ -428,7 +428,7 @@ class Antenna:
                 norm_series[:, 0] = data_extended.loc[:i - 1, 't']
                 norm_series[:, 1:] = np.array(result)
                 norm_series = norm_series[-6:, :]
-            min_node, min_path = mv.find_min_leaf(norm_series, data_extended['t'], i, root_node, norm_vec, weight)
+            min_node, min_path = mv.find_min_leaf(norm_series, data_extended['t'], i, root_node, norm_vec, weight, (max_depth, max_ang_v, min_z))
 
             if min_node is None:  # skip outliers (can't find any legal path)
                 result.append(norm_vec.flatten())
