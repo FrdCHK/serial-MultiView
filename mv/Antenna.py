@@ -177,10 +177,11 @@ class Antenna:
         root.rerun()
 
     def plot_normal_vector(self):
+        linestyles = ['-', '--', ':']
         fig, ax = plt.subplots(1, 1, figsize=(8, 4))
         fig.subplots_adjust(left=0.07, right=0.98, top=0.98, bottom=0.1)
         for i in range(self.mv_result.shape[1]):
-            ax.plot(self.mv_t, self.mv_result[:, i], label=chr(120 + i))
+            ax.plot(self.mv_t, self.mv_result[:, i], ls=linestyles[i], label=chr(120 + i))
         ax.legend()
         ax.set_xlabel("time (day)")
         return fig
@@ -193,6 +194,7 @@ class Antenna:
         """
         self.target_pos = target_pos
 
+        markers = ['o', 'd', '^', 's', 'v', 'p', '*', '8', '<', '>']
         fig, ax = plt.subplots(1, 1, figsize=(8, 3))
         fig.subplots_adjust(left=0.06, right=0.99, top=0.98, bottom=0.1)
 
@@ -201,21 +203,22 @@ class Antenna:
             mv_target_phase.append(mv.plane(*self.mv_result[i], *self.target_pos))
         mv_target_phase = np.array(mv_target_phase)
         mv_target_phase_wrap = (mv_target_phase + np.pi) % (2 * np.pi) - np.pi
-        if ylim:
-            ax.plot(self.mv_t, mv_target_phase_wrap, 'x', color='k', ls='', label='Target')
-        else:
-            ax.plot(self.mv_t, mv_target_phase, 'x', color='#222222', alpha=0.6, ls='', label='Target')
 
-        for item in self.secondary_calibrators:
+        for i, item in enumerate(self.secondary_calibrators):
             if ylim:
                 plot_data = self.original_data.copy(deep=True)
                 non_flagged_index = self.adjust_info['flag'] == 0
                 plot_data = plot_data.loc[non_flagged_index]
                 plot_data = plot_data.loc[plot_data['calsour'] == item.id]
-                ax.plot(plot_data['t'], plot_data['phase'], '.', label=item.name)
+                ax.plot(plot_data['t'], plot_data['phase'], ls='none', marker=markers[i], label=item.name)
             else:
                 plot_data = self.accu_data.loc[self.accu_data['calsour'] == item.id]
-                ax.plot(plot_data['t'], plot_data['phase'], '.', label=item.name)
+                ax.plot(plot_data['t'], plot_data['phase'], ls='none', marker=markers[i], label=item.name)
+
+        if ylim:
+            ax.plot(self.mv_t, mv_target_phase_wrap, 'x', color='k', ls='', label='Target')
+        else:
+            ax.plot(self.mv_t, mv_target_phase, 'x', color='#222222', alpha=0.6, ls='', label='Target')
 
         flagged_index = self.adjust_info['flag'] == 1
         flagged_data = self.original_data.loc[flagged_index].copy(deep=True)
@@ -223,7 +226,7 @@ class Antenna:
         for i, item in enumerate(self.secondary_calibrators):
             plot_data = flagged_data.loc[flagged_data['calsour'] == item.id]
             if not plot_data.empty:
-                ax.plot(plot_data['t'], plot_data['phase'], '.', c=self.colors[i], alpha=0.3)
+                ax.plot(plot_data['t'], plot_data['phase'], ls='none', marker=markers[i], c=self.colors[i], alpha=0.3)
 
         ax.set_xlabel("time (day)")
         ax.set_ylabel("phase")
