@@ -229,7 +229,7 @@ class Antenna:
                 ax.plot(plot_data['t'], plot_data['phase'], ls='none', marker=markers[i], c=self.colors[i], alpha=0.3)
 
         ax.set_xlabel("time (day)")
-        ax.set_ylabel("phase")
+        ax.set_ylabel("phase (rad)")
 
         if ylim:
             y_max = np.pi
