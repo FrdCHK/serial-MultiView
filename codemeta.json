@@ -1,0 +1,67 @@
+{
+    "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
+    "@type": "SoftwareSourceCode",
+    "name": "sMV: Serial MultiView phase plane estimation",
+    "description": "sMV (serial MultiView) scripts provide a semi-automatic and easy-to-use workflow for serial MultiView phase plane estimation. The phase plane is iteratively rotated based on the time series of calibrator residual phases; because time-domain information is included in the iterations, phase ambiguities are accurately and automatically identified. sMV enables efficient, high-accuracy differential astrometry and artifact-reduced imaging for astrophysical studies.",
+    "identifier": "ascl:2508.016",
+    "author": [
+        {
+            "@type": "Person",
+            "givenName": "Jingdong",
+            "familyName": "Zhang",
+            "@id": "PLACEHOLDER: Add ORCID (https://orcid.org/xxxxxx) here"
+        },
+        {
+            "@type": "Person",
+            "givenName": "Bo",
+            "familyName": "Zhang",
+            "@id": "PLACEHOLDER: Add ORCID (https://orcid.org/xxxxxx) here"
+        },
+        {
+            "@type": "Person",
+            "givenName": "Shuangjing",
+            "familyName": "Xu",
+            "@id": "PLACEHOLDER: Add ORCID (https://orcid.org/xxxxxx) here"
+        },
+        {
+            "@type": "Person",
+            "givenName": "Maria J.",
+            "familyName": "Rioja",
+            "@id": "PLACEHOLDER: Add ORCID (https://orcid.org/xxxxxx) here"
+        },
+        {
+            "@type": "Person",
+            "givenName": "Richard",
+            "familyName": "Dodson",
+            "@id": "PLACEHOLDER: Add ORCID (https://orcid.org/xxxxxx) here"
+        },
+        {
+            "@type": "Person",
+            "givenName": "Xiaofeng",
+            "familyName": "Mai",
+            "@id": "PLACEHOLDER: Add ORCID (https://orcid.org/xxxxxx) here"
+        },
+        {
+            "@type": "Person",
+            "givenName": "Oleg",
+            "familyName": "Titov",
+            "@id": "PLACEHOLDER: Add ORCID (https://orcid.org/xxxxxx) here"
+        }
+    ],
+    "citation": "https://ui.adsabs.harvard.edu/abs/2025ascl.soft08016Z",
+    "relatedLink": [
+        "PLACEHOLDER: Add related links (if any) here"
+    ],
+    "codeRepository": [
+        "https://github.com/FrdCHK/serial-MultiView"
+    ],
+    "referencePublication": [
+        {
+            "@type": "ScholarlyArticle",
+            "url": "https://ui.adsabs.harvard.edu/abs/2025AJ....170....4Z",
+            "@id": "PLACEHOLDER: Add DOI (https://doi.org/xxxxxx) here"
+        }
+    ],
+    "version": "PLACEHOLDER: Add version here",
+    "license": "PLACEHOLDER: Add license (ideally as a URL to the SPDX page - e.g. https://spdx.org/licenses/MIT.html) here"
+}
