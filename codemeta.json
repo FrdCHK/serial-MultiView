@@ -9,48 +9,48 @@
             "@type": "Person",
             "givenName": "Jingdong",
             "familyName": "Zhang",
-            "@id": "PLACEHOLDER: Add ORCID (https://orcid.org/xxxxxx) here"
+            "@id": "0000-0002-9768-2700"
         },
         {
             "@type": "Person",
             "givenName": "Bo",
             "familyName": "Zhang",
-            "@id": "PLACEHOLDER: Add ORCID (https://orcid.org/xxxxxx) here"
+            "@id": "0000-0003-1353-9040"
         },
         {
             "@type": "Person",
             "givenName": "Shuangjing",
             "familyName": "Xu",
-            "@id": "PLACEHOLDER: Add ORCID (https://orcid.org/xxxxxx) here"
+            "@id": "0000-0003-2953-6442"
         },
         {
             "@type": "Person",
             "givenName": "Maria J.",
             "familyName": "Rioja",
-            "@id": "PLACEHOLDER: Add ORCID (https://orcid.org/xxxxxx) here"
+            "@id": "0000-0003-4871-9535"
         },
         {
             "@type": "Person",
             "givenName": "Richard",
             "familyName": "Dodson",
-            "@id": "PLACEHOLDER: Add ORCID (https://orcid.org/xxxxxx) here"
+            "@id": "0000-0003-0392-3604"
         },
         {
             "@type": "Person",
             "givenName": "Xiaofeng",
             "familyName": "Mai",
-            "@id": "PLACEHOLDER: Add ORCID (https://orcid.org/xxxxxx) here"
+            "@id": "0000-0001-7573-0145"
         },
         {
             "@type": "Person",
             "givenName": "Oleg",
             "familyName": "Titov",
-            "@id": "PLACEHOLDER: Add ORCID (https://orcid.org/xxxxxx) here"
+            "@id": "0000-0003-1751-676X"
         }
     ],
     "citation": "https://ui.adsabs.harvard.edu/abs/2025ascl.soft08016Z",
     "relatedLink": [
-        "PLACEHOLDER: Add related links (if any) here"
+        "https://doi.org/10.48550/arXiv.2501.10978"
     ],
     "codeRepository": [
         "https://github.com/FrdCHK/serial-MultiView"
@@ -59,9 +59,9 @@
         {
             "@type": "ScholarlyArticle",
             "url": "https://ui.adsabs.harvard.edu/abs/2025AJ....170....4Z",
-            "@id": "PLACEHOLDER: Add DOI (https://doi.org/xxxxxx) here"
+            "@id": "(https://doi.org/10.3847/1538-3881/add40e"
         }
     ],
-    "version": "PLACEHOLDER: Add version here",
-    "license": "PLACEHOLDER: Add license (ideally as a URL to the SPDX page - e.g. https://spdx.org/licenses/MIT.html) here"
+    "version": "1.0.0",
+    "license": "https://spdx.org/licenses/GPL-3.0-only.html"
 }
