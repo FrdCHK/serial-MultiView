@@ -49,6 +49,9 @@ class GetObsInfo(Plugin):
                                            "day_num": obs_day_num}})
         
         # optional: LISTR & PRTAN
+        if (("listr_outprint" in self.params) or ("prtan_outprint" in self.params)) and ("GeneralTask" not in context.get_context()["loaded_plugins"]):
+            context.logger.error("Plugin GeneralTask not found")
+            return False
         if "listr_outprint" in self.params:
             task = context.get_context()["loaded_plugins"]["GeneralTask"]({"task_name": "LISTR",
                                                                            "inname": self.params["inname"],
