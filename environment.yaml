@@ -1,0 +1,18 @@
+# Environment configuration for Modular Pipeline
+name: modular-pipeline
+channels:
+  - defaults
+  - conda-forge
+  # kettenis channel for parseltongue
+  - kettenis
+dependencies:
+  # Core Python version requirement, note that other versions may NOT work
+  - python=3.8
+  
+  # Standard packages available via conda
+  - pyyaml
+  - pandas
+  - astropy
+  - parseltongue
+
+# AIPS needs to be installed separately

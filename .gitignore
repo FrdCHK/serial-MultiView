@@ -1,6 +1,5 @@
-!exp/.gitkeep
-!predef/.gitkeep
-exp/*
-predef/*
-test/*
 .idea
+__pycache__/
+log/*
+test/*
+pytest.ini
