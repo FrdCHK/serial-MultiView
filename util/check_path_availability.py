@@ -1,10 +1,9 @@
-from typing import Tuple
 import os
 
-def check_path_availability(path: str) -> Tuple[bool, str]:
+def check_path_availability(path: str) -> str:
     if os.path.exists(path):
         if os.path.isfile(path):
-            return True, 'file'
+            return 'file'
         elif os.path.isdir(path):
-            return True, 'dir'
-    return False, 'none'
+            return 'dir'
+    return 'none'

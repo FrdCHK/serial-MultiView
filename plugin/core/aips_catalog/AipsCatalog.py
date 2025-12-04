@@ -4,6 +4,7 @@ from typing import Dict, Any, Union
 
 from core.Plugin import Plugin
 from core.Context import Context
+from util.check_path_availability import check_path_availability
 
 
 class AipsCatalog(Plugin):
@@ -21,13 +22,13 @@ class AipsCatalog(Plugin):
     def run(self, context: Context) -> bool:
         """This run method is only for context init"""
         context.logger.info("Start AIPS catalog and extension file information init")
-        catalog_path = context.get_context().get("directory_tree", {}).get("directory", "")
-        if not catalog_path:
+        workspace_path = context.get_context().get("directory_tree", {}).get("directory", "")
+        if not workspace_path:
             context.logger.error("Workspace not defined")
             return False
         else:
-            catalog_path = os.path.join(catalog_path, "aips_catalog.yaml")
-            if os.path.exists(catalog_path):
+            catalog_path = os.path.join(workspace_path, "aips_catalog.yaml")
+            if check_path_availability(catalog_path) == 'file':
                 with open(catalog_path, "r") as f:
                     catalog = yaml.safe_load(f)
                 context.edit_context({"aips_catalog": catalog})
