@@ -136,7 +136,8 @@ class AipsCatalog(Plugin):
  
     @classmethod
     def get_highest_ext_ver(cls, context: Context, cat_name: str, cat_class: str, cat_disk: int, cat_seq: int, ext_type: str) -> int:
-        # note: whether the catalog exists is NOT checked here, so make sure the catalog exists before calling this function
+        # Note: whether the catalog exists is NOT checked here, so make sure the catalog exists before calling this function
+        # It is also possible to call AIPSUVData.table_highver('AIPS XX') to get the highest version number of a given ext type in the AIPS catalog
         cat_index = cls.search_catalog(context, cat_name, cat_class, cat_disk, cat_seq)
         highst_ver = 0
         for item in context.get_context()["aips_catalog"][cat_index].get("ext", []):
