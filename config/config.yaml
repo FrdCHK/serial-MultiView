@@ -1,3 +1,5 @@
-plugins:
-  - name: CheckPluginAvailability
-    params: {}
+userno: your AIPS userno
+workspace: your/workspace
+idifits: your/data.idifits
+exp_name: your experiment name
+indisk: your disk number

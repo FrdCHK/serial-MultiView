@@ -1,0 +1,25 @@
+{# for standard VLBA single-calibrator PR #}
+plugins:
+  - name: CreateDirectories
+    params: {}
+  - name: AipsCatalog
+    params: {}
+  - name: AipsInit
+    params:
+      userno: {{ userno }}
+  - name: Fitld
+    params:
+      datain: {{ idifits }}
+      outname: {{ exp_name }}
+      outclass: UVDATA
+{% set uvdata_main_cat = 1 %}
+  - name: GetObsInfo
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      inseq: {{ uvdata_main_cat }}
+      listr_outprint: {{ workspace }}/{{ exp_name }}-{{ userno }}/scan.txt
+      prtan_outprint: {{ workspace }}/{{ exp_name }}-{{ userno }}/antenna.txt
+  - name: Exit
+    params: {}

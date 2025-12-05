@@ -1,0 +1,29 @@
+import argparse
+import yaml
+from jinja2 import Environment, FileSystemLoader
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--template", type=str, help="jinja template file name")
+    parser.add_argument("--config", type=str, help="input config file path")
+    parser.add_argument("--control", type=str, help="output control file path")
+    args = parser.parse_args()
+    if args.template is None:
+        args.template = input("Please specify jinja template file: ")
+    if args.config is None:
+        args.config = input("Please specify input config file path: ")
+    if args.control is None:
+        args.control = input("Please specify output control file path: ")
+
+    env = Environment(loader=FileSystemLoader('./template'), trim_blocks=True)
+
+    template = env.get_template(args.template)
+
+    with open(args.config, 'r') as file:
+        paras = yaml.safe_load(file)
+
+    control = template.render(paras)
+    with open(args.control, 'w') as file:
+        file.write(control)
+    print(f"Control file written to {args.control}")

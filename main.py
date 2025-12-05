@@ -36,7 +36,9 @@ def main(config: str, log: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, help="config file path", default="config/config.yaml")
+    parser.add_argument("--control", type=str, help="control file path")
     parser.add_argument("--log", type=str, help="log file directory", default="log")
     args = parser.parse_args()
-    main(args.config, args.log)
+    if args.control is None:
+        args.control = input("Please specify control file path: ")
+    main(args.control, args.log)
