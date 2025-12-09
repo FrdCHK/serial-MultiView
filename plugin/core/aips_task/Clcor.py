@@ -5,11 +5,12 @@ from core.Plugin import Plugin
 from core.Context import Context
 
 from .run_task import run_task
+from .source2ver import source2ver
 
 
 class Clcor(Plugin):
     def __init__(self, params: Dict[str, Any]):
-        """inname, inclass, indisk, inseq, opcode, identifier must be specified"""
+        """inname, inclass, indisk, inseq, opcode, cl_source, identifier must be specified"""
         self.params = params
         if "clcorprm" in self.params and isinstance(self.params["clcorprm"], list):
             self.params["clcorprm"].insert(0, None)
@@ -21,6 +22,11 @@ class Clcor(Plugin):
     
     def run(self, context: Context) -> bool:
         context.logger.info("Start AIPS task CLCOR")
+
+        # search for gainver
+        if not source2ver(context, self.params, "CL"):
+            return False
+
         run_task(self.task, self.params)
         context.get_context()["loaded_plugins"]["AipsCatalog"].add_ext(context,
                                                                        self.params["inname"],
