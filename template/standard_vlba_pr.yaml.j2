@@ -21,5 +21,20 @@ plugins:
       inseq: {{ uvdata_main_cat }}
       listr_outprint: {{ workspace }}/{{ exp_name }}-{{ userno }}/scan.txt
       prtan_outprint: {{ workspace }}/{{ exp_name }}-{{ userno }}/antenna.txt
+  - name: Accor
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      inseq: {{ uvdata_main_cat }}
+      identifier: ACCOR
+  - name: Clcal
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      inseq: {{ uvdata_main_cat }}
+      sn_source: ACCOR
+      identifier: CLCAL(ACCOR)
   - name: Exit
     params: {}
