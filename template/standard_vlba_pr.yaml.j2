@@ -36,5 +36,20 @@ plugins:
       inseq: {{ uvdata_main_cat }}
       sn_source: ACCOR
       identifier: CLCAL(ACCOR)
+  - name: Apcal
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      inseq: {{ uvdata_main_cat }}
+      identifier: APCAL
+  - name: Clcal
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      inseq: {{ uvdata_main_cat }}
+      sn_source: APCAL
+      identifier: CLCAL(APCAL)
   - name: Exit
     params: {}
