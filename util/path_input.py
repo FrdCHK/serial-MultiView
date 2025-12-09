@@ -1,6 +1,6 @@
 from .check_path_availability import check_path_availability
 
-def path_input(prompt, type, default=None, exist=False):
+def path_input(prompt: str, type: str, default: str=None, exist: bool=False):
     """
     User input path
     
