@@ -112,12 +112,12 @@ class AipsCatalog(Plugin):
             logger_text = f"{ext_type}({ext_source})"
         else:
             context.logger.error("Ext version or source must be specified")
-            return {"status": False, "ext_index": -1, "ver_index": -1}
+            return {"status": False, "cat_index": -1, "ext_index": -1, "ver_index": -1}
         
         cat_index = cls.search_catalog(context, cat_name, cat_class, cat_disk, cat_seq)
         if cat_index < 0:
             context.logger.error(f"Catalog not found: name={cat_name} class={cat_class} disk={cat_disk} seq={cat_seq}")
-            return {"status": False, "ext_index": -2, "ver_index": -2}
+            return {"status": False, "cat_index": -2, "ext_index": -2, "ver_index": -2}
         
         for ext_index, item in enumerate(context.get_context()["aips_catalog"][cat_index]["ext"]):
             if item["type"] == ext_type:
@@ -125,14 +125,14 @@ class AipsCatalog(Plugin):
                     for ver_index, ver in enumerate(item["version"]):
                         if ver["num"] == ext_version:
                             context.logger.debug(f"Ext {logger_text} found: name={cat_name} class={cat_class} disk={cat_disk} seq={cat_seq}")
-                            return {"status": True, "ext_index": ext_index, "ver_index": ver_index}
+                            return {"status": True, "cat_index": cat_index, "ext_index": ext_index, "ver_index": ver_index}
                 else:
                     for ver_index, ver in enumerate(item["version"]):
                         if ver["source"] == ext_source:
                             context.logger.debug(f"Ext {logger_text} found: name={cat_name} class={cat_class} disk={cat_disk} seq={cat_seq}")
-                            return {"status": True, "ext_index": ext_index, "ver_index": ver_index}
+                            return {"status": True, "cat_index": cat_index, "ext_index": ext_index, "ver_index": ver_index}
         context.logger.debug(f"Ext {logger_text} not found in catalog: name={cat_name} class={cat_class} disk={cat_disk} seq={cat_seq}")
-        return {"status": False, "ext_index": -3, "ver_index": -3}
+        return {"status": False, "cat_index": -3, "ext_index": -3, "ver_index": -3}
  
     @classmethod
     def get_highest_ext_ver(cls, context: Context, cat_name: str, cat_class: str, cat_disk: int, cat_seq: int, ext_type: str) -> int:
