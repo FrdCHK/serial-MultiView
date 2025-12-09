@@ -28,7 +28,7 @@ class Clcal(Plugin):
                                                                                               ext_source=self.params["sn_source"])
         if not ext_search_result["status"]:
             return False
-        self.params["snv"] = context.get_context()["aips_catalog"][ext_search_result["cat_index"]]["ext"][ext_search_result["ext_index"]]["version"][ext_search_result["ver_index"]]["num"]
+        self.params["snver"] = context.get_context()["aips_catalog"][ext_search_result["cat_index"]]["ext"][ext_search_result["ext_index"]]["version"][ext_search_result["ver_index"]]["num"]
         self.params.pop("sn_source")
         run_task(self.task, self.params)
         context.get_context()["loaded_plugins"]["AipsCatalog"].add_ext(context,
@@ -36,6 +36,7 @@ class Clcal(Plugin):
                                                                        self.params["inclass"],
                                                                        self.params["indisk"],
                                                                        self.params["inseq"],
-                                                                       "CL", ext_source=self.params["identifier"])
+                                                                       "CL",
+                                                                       ext_source=self.params["identifier"])
         context.logger.info("AIPS task CLCAL finished")        
         return True
