@@ -5,6 +5,8 @@ from core.Context import Context
 from core.plugin_load import plugin_load
 from util.check_plugin_availability import check_plugin_availability
 
+from util.path_input import path_input
+
 
 def main(config: str, log: str) -> None:
     logger = logger_init(log)
@@ -40,5 +42,5 @@ if __name__ == "__main__":
     parser.add_argument("--log", type=str, help="log file directory", default="log")
     args = parser.parse_args()
     if args.control is None:
-        args.control = input("Please specify control file path: ")
+        args.control = path_input("Please specify control file path", "file", exist=True)
     main(args.control, args.log)

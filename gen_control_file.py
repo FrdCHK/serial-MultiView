@@ -2,6 +2,8 @@ import argparse
 import yaml
 from jinja2 import Environment, FileSystemLoader
 
+from util.path_input import path_input
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -10,11 +12,11 @@ if __name__ == "__main__":
     parser.add_argument("--control", type=str, help="output control file path")
     args = parser.parse_args()
     if args.template is None:
-        args.template = input("Please specify jinja template file: ")
+        args.template = path_input("Please specify jinja template file (root dir is ./template)", "file", exist=True)
     if args.config is None:
-        args.config = input("Please specify input config file path: ")
+        args.config = path_input("Please specify input config file path", "file", exist=True)
     if args.control is None:
-        args.control = input("Please specify output control file path: ")
+        args.control = path_input("Please specify output control file path", "file")
 
     env = Environment(loader=FileSystemLoader('./template'), trim_blocks=True)
 
