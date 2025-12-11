@@ -31,6 +31,8 @@ class AipsCatalog(Plugin):
             if check_path_availability(catalog_path) == 'file':
                 with open(catalog_path, "r") as f:
                     catalog = yaml.safe_load(f)
+                if catalog is None:
+                    catalog = []
                 context.edit_context({"aips_catalog": catalog})
             else:
                 context.edit_context({"aips_catalog": []})
