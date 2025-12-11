@@ -25,7 +25,7 @@ if __name__ == "__main__":
     with open(args.config, 'r') as file:
         paras = yaml.safe_load(file)
 
-    control = template.render(paras)
+    control = template.render(**paras, paras=paras)
     with open(args.control, 'w') as file:
         file.write(control)
     print(f"Control file written to {args.control}")

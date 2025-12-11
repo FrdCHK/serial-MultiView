@@ -1,4 +1,8 @@
 {# for standard VLBA single-calibrator PR #}
+config:
+{% for key in paras.keys() %}
+  {{ key }}: {{ paras[key] }}
+{% endfor %}
 plugins:
   - name: CreateDirectories
     params: {}
@@ -78,7 +82,7 @@ plugins:
       identifier: CLCOR(EOPS)
   - name: Ionex
     params:
-      eop_path: {{ ionex_dir }}
+      ionex_dir: {{ ionex_dir }}
   - name: Tecor
     params:
       inname: {{ exp_name }}
