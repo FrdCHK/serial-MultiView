@@ -31,6 +31,7 @@ def main(config: str, log: str) -> None:
             plugin_instance = plugins[item['name']](item['params'])
             if not plugin_instance.run(context):
                 logger.error(f"Terminate main: error in plugin {item['name']}")
+                plugins['Exit']().run(context)
                 return
 
     logger.info("End main")
