@@ -1,6 +1,6 @@
 from typing import Dict, Any
 from AIPSTask import AIPSTask
-from datetime import datetime, timedelta
+import os
 
 from core.Plugin import Plugin
 from core.Context import Context
@@ -12,6 +12,8 @@ class Tecor(Plugin):
     def __init__(self, params: Dict[str, Any]):
         """inname, inclass, indisk, inseq, identifier must be specified"""
         self.params = params
+        if "aparm" in self.params and isinstance(self.params["aparm"], list):
+            self.params["aparm"].insert(0, None)
         self.task = AIPSTask("TECOR")
 
     @classmethod
@@ -23,7 +25,7 @@ class Tecor(Plugin):
         d = context.get_context()["obs_time"]["date"]
         year = d.year
         doy = d.timetuple().tm_yday
-        self.params["infile"] = f"jplg{doy:03d}0.{year % 2000:02d}i"
+        self.params["infile"] = os.path.join(context.get_context()["config"]["ionex_dir"], f"jplg{doy:03d}0.{year % 2000:02d}i")
         self.params["nfiles"] = context.get_context()["obs_time"]["day_num"]
         run_task(self.task, self.params)
         context.get_context()["loaded_plugins"]["AipsCatalog"].add_ext(context,

@@ -1,6 +1,6 @@
-from typing import Dict, Any
 import pycurl
-from datetime import datetime, timedelta
+from pycurl import error as pycurl_error
+from datetime import timedelta
 import os
 
 from core.Plugin import Plugin
@@ -33,13 +33,20 @@ class Ionex(Plugin):
                     download_name = f"JPL0OPSFIN_{year:4d}{doy:03d}0000_01D_02H_GIM.INX.gz"
                     download_full_dir = os.path.join(self.params["ionex_dir"], f"{fname}.gz")
                 with open(download_full_dir, 'wb') as f:
-                    c = pycurl.Curl()
-                    c.setopt(c.URL, url + download_name)
-                    c.setopt(c.USERPWD, "anonymous:daip@nrao.edu")
-                    c.setopt(c.FTP_SSL, pycurl.FTPSSL_ALL)
-                    c.setopt(c.WRITEDATA, f)
-                    c.perform()
-                    c.close()
+                    try:
+                        c = pycurl.Curl()
+                        c.setopt(c.URL, url + download_name)
+                        c.setopt(c.USERPWD, "anonymous:daip@nrao.edu")
+                        c.setopt(c.FTP_SSL, pycurl.FTPSSL_ALL)
+                        c.setopt(c.WRITEDATA, f)
+                        c.setopt(c.TIMEOUT, 120)
+                        c.setopt(c.CONNECTTIMEOUT, 30)
+                        c.perform()
+                    except pycurl_error as e:
+                        context.logger.error(f"Ionex file {fname} download failed: {e}")
+                        return False
+                    else:
+                        c.close()
                 try:
                     downloaded_ionex_try_open = open(download_full_dir, "r")
                 except IOError:
@@ -47,7 +54,7 @@ class Ionex(Plugin):
                     return False
                 else:
                     downloaded_ionex_try_open.close()
-                    unzip(download_full_dir)
+                    unzip(context, download_full_dir)
                     context.logger.info(f"Ionex file {fname} downloaded")
             else:
                 ionex_try_open.close()
