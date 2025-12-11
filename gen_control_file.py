@@ -23,9 +23,9 @@ if __name__ == "__main__":
     template = env.get_template(args.template)
 
     with open(args.config, 'r') as file:
-        paras = yaml.safe_load(file)
+        config = yaml.safe_load(file)
 
-    control = template.render(**paras, paras=paras)
+    control = template.render(**config, config=config)
     with open(args.control, 'w') as file:
         file.write(control)
     print(f"Control file written to {args.control}")

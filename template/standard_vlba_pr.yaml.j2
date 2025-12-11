@@ -1,7 +1,7 @@
 {# for standard VLBA single-calibrator PR #}
 config:
-{% for key in paras.keys() %}
-  {{ key }}: {{ paras[key] }}
+{% for key in config.keys() %}
+  {{ key }}: {{ config[key] }}
 {% endfor %}
 plugins:
   - name: CreateDirectories
