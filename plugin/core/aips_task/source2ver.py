@@ -4,6 +4,18 @@ from core.Context import Context
 
 
 def source2ver(context: Context, params: Dict[str, Any], ext_type: str) -> bool:
+    """
+    Search for extension version based on extension source. The version number is directly added to params.
+    
+    :param context: context instance
+    :type context: Context
+    :param params: parameters
+    :type params: Dict[str, Any]
+    :param ext_type: extension type. SN or CL
+    :type ext_type: str
+    :return: whether the search is successful
+    :rtype: bool
+    """
     if ext_type == "SN":
         ext_source_key = "sn_source"
         new_param_key = "snver"
