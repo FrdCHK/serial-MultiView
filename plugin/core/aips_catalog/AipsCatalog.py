@@ -22,7 +22,7 @@ class AipsCatalog(Plugin):
     def run(self, context: Context) -> bool:
         """This run method is only for context init"""
         context.logger.info("Start AIPS catalog and extension file information init")
-        workspace_path = context.get_context().get("directory_tree", {}).get("directory", "")
+        workspace_path = context.get_context()["config"]["workspace"]
         if not workspace_path:
             context.logger.error("Workspace not defined")
             return False
@@ -40,16 +40,11 @@ class AipsCatalog(Plugin):
 
     @classmethod
     def save_catalog(cls, context: Context) -> bool:
-        catalog_path = context.get_context().get("directory_tree", {}).get("directory", "")
-        if not catalog_path:
-            context.logger.error("Workspace not defined")
-            return False
-        else:
-            catalog_path = os.path.join(catalog_path, "aips_catalog.yaml")
-            with open(catalog_path, "w") as f:
-                yaml.safe_dump(context.get_context().get("aips_catalog", []), f)
-            context.logger.info(f"AIPS catalog saved to {catalog_path}")
-            return True
+        catalog_path = os.path.join(context.get_context()["config"]["workspace"], "aips_catalog.yaml")
+        with open(catalog_path, "w") as f:
+            yaml.safe_dump(context.get_context().get("aips_catalog", []), f)
+        context.logger.info(f"AIPS catalog saved to {catalog_path}")
+        return True
 
     @classmethod
     def search_catalog(cls, context: Context, cat_name: str, cat_class: str, cat_disk: int, cat_seq: int) -> int:

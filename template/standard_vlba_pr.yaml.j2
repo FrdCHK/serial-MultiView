@@ -1,11 +1,11 @@
-{# for standard VLBA single-calibrator PR #}
+{# For standard VLBA single-calibrator PR #}
 config:
 {% for key in config.keys() %}
   {{ key }}: {{ config[key] }}
 {% endfor %}
 plugins:
-  - name: CreateDirectories
-    params: {}
+{#  - name: CreateDirectories
+    params: {} #}
   - name: AipsCatalog
     params: {}
   - name: AipsInit
@@ -23,8 +23,8 @@ plugins:
       inclass: UVDATA
       indisk: {{ indisk }}
       inseq: {{ uvdata_main_cat }}
-      listr_outprint: {{ workspace }}/{{ exp_name }}-{{ userno }}/scan.txt
-      prtan_outprint: {{ workspace }}/{{ exp_name }}-{{ userno }}/antenna.txt
+      listr_outprint: {{ workspace }}/scan.txt
+      prtan_outprint: {{ workspace }}/antenna.txt
   - name: Accor
     params:
       inname: {{ exp_name }}
@@ -92,5 +92,9 @@ plugins:
       aparm: [1, 0]
       cl_source: CLCOR(EOPS)
       identifier: TECOR
+  - name: RefAntSelect
+    params:
+      auto_ref_ant: {{ auto_ref_ant }} {# Only works for VLBA, and TY&WX tables will be read to assess data quality. If False, ref_ant must be specified. #}
+      ref_ant: {{ ref_ant }} {# 2-charactor code used. Ignored if auto_ref_ant is True. #}
   - name: Exit
     params: {}
