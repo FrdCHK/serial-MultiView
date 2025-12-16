@@ -94,7 +94,9 @@ plugins:
       identifier: TECOR
   - name: RefAntSelect
     params:
-      auto_ref_ant: {{ auto_ref_ant }} {# Only works for VLBA, and TY&WX tables will be read to assess data quality. If False, ref_ant must be specified. #}
-      ref_ant: {{ ref_ant }} {# 2-charactor code used. Ignored if auto_ref_ant is True. #}
+{# Only works for VLBA, and TY&WX tables will be read to assess data quality. If False, ref_ant must be specified. #}
+      auto_ref_ant: {{ auto_ref_ant }}
+{# 2-charactor code used. Ignored if auto_ref_ant is True. #}
+      ref_ant: {{ ref_ant }}
   - name: Exit
     params: {}
