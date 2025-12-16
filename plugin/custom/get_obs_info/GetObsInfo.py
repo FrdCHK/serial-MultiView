@@ -40,13 +40,22 @@ class GetObsInfo(Plugin):
             nx_df.loc[nx_df.index.size] = [item["time"], item["time_interval"], item["source_id"]]
         obs_day_num = int(nx_table[len(nx_table) - 1]['time'] + 1)  # obs day number
 
-        context.edit_context({"antennas": antennas.to_dict(),
-                              "sources": sources.to_dict(),
+        obs_freq = data.header.crval[2] * 1e-9  # obs frequency in GHz
+        no_stokes = data.header.naxis[1]  # polarization number
+        no_if = data.header.naxis[3]  # IF number
+        no_chan = data.header.naxis[2]  # channel number per IF
+
+        context.edit_context({"antennas": antennas.to_dict(orient='records'),
+                              "sources": sources.T.to_dict(orient='records'),
                               "obs_time": {"date": obs_date,
                                            "jd_0": jd_0,
                                            "year": obs_year,
                                            "doy": obs_doy,
-                                           "day_num": obs_day_num}})
+                                           "day_num": obs_day_num},
+                              "obs_freq": obs_freq,
+                              "no_stokes": no_stokes,
+                              "no_if": no_if,
+                              "no_chan": no_chan})
         
         # optional: LISTR & PRTAN
         if (("listr_outprint" in self.params) or ("prtan_outprint" in self.params)) and ("GeneralTask" not in context.get_context()["loaded_plugins"]):

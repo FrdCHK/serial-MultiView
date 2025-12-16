@@ -94,6 +94,10 @@ plugins:
       identifier: TECOR
   - name: RefAntSelect
     params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      inseq: {{ uvdata_main_cat }}
 {# Only works for VLBA, and TY&WX tables will be read to assess data quality. If False, ref_ant must be specified. #}
       auto_ref_ant: {{ auto_ref_ant }}
 {# 2-charactor code used. Ignored if auto_ref_ant is True. #}
