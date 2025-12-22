@@ -17,14 +17,15 @@ class Context:
         logger.info("Start initiating context")
         self.control_file_path = control_file_path
         self.logger = logger
-        self.context = self.init_context_from_config()
+        self.context = self.init_context_from_control()
         self.edit_context({"logger": logger})
         self.edit_context({"control_file_path": control_file_path})
         self.context_file_path = os.path.join(self.context["config"]["workspace"], "context.yaml")
         self.edit_context({"context_file_path": self.context_file_path})
         self.edit_context(self.load_context_from_file())
+        self.edit_context(self.init_context_from_control())  # load from control file again to override cached context
 
-    def init_context_from_config(self):
+    def init_context_from_control(self):
         try:
             with open(self.control_file_path, 'r') as f:
                 self.logger.info(f"Control file {self.control_file_path} loaded successfully")
