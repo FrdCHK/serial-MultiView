@@ -8,17 +8,16 @@ from util.check_plugin_availability import check_plugin_availability
 from util.path_input import path_input
 
 
-def main(config: str, log: str) -> None:
+def main(control_file_path: str, log: str) -> None:
     logger = logger_init(log)
     logger.info("Start main")
 
-    context = Context(logger, config)
+    context = Context(logger, control_file_path)
     if not context.get_context():
         logger.error("Terminate main")
         return
-    context.edit_context({"config_path": config})
+    context.edit_context({"config_path": control_file_path})
     context.edit_context({"log_dir": log})
-    context.edit_context({"logger": logger})
     logger.info("Initiating context succeeded")
 
     plugins = plugin_load("plugin", logger)
@@ -40,7 +39,7 @@ def main(config: str, log: str) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--control", type=str, help="control file path")
-    parser.add_argument("--log", type=str, help="log file directory", default="log")
+    parser.add_argument("--log", type=str, help="log file directory, defaults to ./log/", default="log")
     args = parser.parse_args()
     if args.control is None:
         args.control = path_input("Please specify control file path", "file", exist=True)

@@ -8,6 +8,8 @@ class Exit(Plugin):
         return "save and exit"
 
     def run(self, context: Context) -> bool:
-        context.get_context()["loaded_plugins"]["AipsCatalog"].save_catalog(context)
+        # context.get_context()["loaded_plugins"]["AipsCatalog"].save_catalog(context)
+        if context.get_context()["context_file_path"] is not None:
+            context.save_context_to_file()
         context.logger.info("Exit")
         return True

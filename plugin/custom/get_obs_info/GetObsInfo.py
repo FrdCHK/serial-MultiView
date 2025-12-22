@@ -46,9 +46,9 @@ class GetObsInfo(Plugin):
         no_chan = data.header.naxis[2]  # channel number per IF
 
         context.edit_context({"antennas": antennas.to_dict(orient='records'),
-                              "sources": sources.T.to_dict(orient='records'),
+                              "sources": sources.to_dict(orient='records'),
                               "obs_time": {"date": obs_date,
-                                           "jd_0": jd_0,
+                                           "jd_0": float(jd_0),
                                            "year": obs_year,
                                            "doy": obs_doy,
                                            "day_num": obs_day_num},

@@ -25,6 +25,5 @@ class Fitld(Plugin):
                                                                            self.params["outclass"],
                                                                            self.params["outdisk"] if "outdisk" in self.params else 1,
                                                                            history=self.params["history"] if "history" in self.params else "Created by FITLD")
-        context.get_context()["loaded_plugins"]["AipsCatalog"].save_catalog(context)
         context.logger.info("AIPS task FITLD finished")
         return True
