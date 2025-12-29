@@ -132,5 +132,13 @@ plugins:
       sn_source: FRING(MPC)
       cl_source: TECOR
       identifier: CLCAL(MPC)
+  - name: SourceSelect
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      inseq: {{ uvdata_main_cat }}
+{# load: path/to/another/context.yaml #}
+{# for primary calibrator selection: possm: True #}
   - name: Exit
     params: {}
