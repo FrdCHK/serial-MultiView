@@ -55,7 +55,7 @@ class SourceSelect(Plugin):
             calibrators = pd.DataFrame(columns=["ID", "NAME", "RA", "DEC"])
             while True:
                 redo_flag = False
-                user_input = input(f"Target {i+1} calibrator IDs (space separated):")
+                user_input = input(f"Target {i+1} calibrator IDs (space separated): ")
                 parts = user_input.split()
                 parts = list(dict.fromkeys(parts))  # remove duplicates
                 for part in parts:
