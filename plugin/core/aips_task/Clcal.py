@@ -12,9 +12,6 @@ class Clcal(Plugin):
     def __init__(self, params: Dict[str, Any]):
         """inname, inclass, indisk, inseq, sn_source, cl_source, identifier must be specified"""
         self.params = params
-        for _, v in self.params.items():
-            if isinstance(v, list):
-                v.insert(0, None)
         self.task = AIPSTask("CLCAL")
 
     @classmethod
@@ -31,11 +28,8 @@ class Clcal(Plugin):
         if not source2ver(context, self.params, "CL"):
             return False
         
-        # replace default parameter values
-        if "calsour" in self.params and self.params["calsour"] == "$MPC_AUTO$":
-            self.params["calsour"] = [None, context.get_context()["mpc_calsour"]["name"]]
-
-        run_task(self.task, self.params)
+        if not run_task(self.task, self.params, context):
+            return False
         context.get_context()["loaded_plugins"]["AipsCatalog"].add_ext(context,
                                                                        self.params["inname"],
                                                                        self.params["inclass"],

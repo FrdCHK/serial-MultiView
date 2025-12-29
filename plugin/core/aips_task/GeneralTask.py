@@ -12,9 +12,6 @@ class GeneralTask(Plugin):
         """task_name must be specified"""
         self.params = {k: v for k, v in params.items() if k != "task_name"}
         self.task_name = params["task_name"]
-        for _, v in self.params.items():
-            if isinstance(v, list):
-                v.insert(0, None)
         self.task = AIPSTask(self.task_name)
 
     @classmethod
@@ -23,6 +20,7 @@ class GeneralTask(Plugin):
     
     def run(self, context: Context) -> bool:
         context.logger.info(f"Start AIPS task {self.task_name}")
-        run_task(self.task, self.params)
+        if not run_task(self.task, self.params, context):
+            return False
         context.logger.info(f"AIPS task {self.task_name} finished")
         return True

@@ -12,9 +12,6 @@ class Tecor(Plugin):
     def __init__(self, params: Dict[str, Any]):
         """inname, inclass, indisk, inseq, identifier must be specified"""
         self.params = params
-        for _, v in self.params.items():
-            if isinstance(v, list):
-                v.insert(0, None)
         self.task = AIPSTask("TECOR")
 
     @classmethod
@@ -28,7 +25,8 @@ class Tecor(Plugin):
         doy = d.timetuple().tm_yday
         self.params["infile"] = os.path.join(context.get_context()["config"]["ionex_dir"], f"jplg{doy:03d}0.{year % 2000:02d}i")
         self.params["nfiles"] = context.get_context()["obs_time"]["day_num"]
-        run_task(self.task, self.params)
+        if not run_task(self.task, self.params, context):
+            return False
         context.get_context()["loaded_plugins"]["AipsCatalog"].add_ext(context,
                                                                        self.params["inname"],
                                                                        self.params["inclass"],

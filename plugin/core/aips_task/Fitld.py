@@ -19,7 +19,8 @@ class Fitld(Plugin):
     
     def run(self, context: Context) -> bool:
         context.logger.info("Start AIPS task FITLD")
-        run_task(self.task, self.params)
+        if not run_task(self.task, self.params, context):
+            return False
         context.get_context()["loaded_plugins"]["AipsCatalog"].add_catalog(context,
                                                                            self.params["outname"],
                                                                            self.params["outclass"],

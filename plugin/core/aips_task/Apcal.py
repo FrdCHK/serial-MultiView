@@ -19,7 +19,8 @@ class Apcal(Plugin):
     
     def run(self, context: Context) -> bool:
         context.logger.info("Start AIPS task APCAL")
-        run_task(self.task, self.params)
+        if not run_task(self.task, self.params, context):
+            return False
         context.get_context()["loaded_plugins"]["AipsCatalog"].add_ext(context,
                                                                        self.params["inname"],
                                                                        self.params["inclass"],

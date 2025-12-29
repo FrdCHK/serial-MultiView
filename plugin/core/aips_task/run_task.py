@@ -1,9 +1,23 @@
 from AIPSTask import AIPSTask
 from typing import Dict, Any
 
-def run_task(task: AIPSTask, params: Dict[str, Any]) -> None:
+from core.Context import Context
+from util.parse_context_variable import parse_context_variable
+
+def run_task(task: AIPSTask, params: Dict[str, Any], context: Context) -> bool:
+    try:
+        resolved = parse_context_variable(params, context)
+        import pdb
+        pdb.set_trace()
+    except KeyError as e:
+        context.logger.error(e)
+        return False
+    for _, param_value in resolved.items():
+        if isinstance(param_value, list):
+            param_value.insert(0, None)
+    
     task_attributes = [attr for attr in dir(task) if not attr.startswith('_')]
-    for param_key, param_value in params.items():
+    for param_key, param_value in resolved.items():
         if param_key in task_attributes:
             # Check if it's a callable method or an attribute
             attr = getattr(task, param_key)
@@ -14,3 +28,4 @@ def run_task(task: AIPSTask, params: Dict[str, Any]) -> None:
                 # It's an attribute, set its value
                 setattr(task, param_key, param_value)
     task.go()
+    return True
