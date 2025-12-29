@@ -12,6 +12,8 @@ class Clcal(Plugin):
     def __init__(self, params: Dict[str, Any]):
         """inname, inclass, indisk, inseq, sn_source, cl_source, identifier must be specified"""
         self.params = params
+        if "bparm" in self.params and isinstance(self.params["bparm"], list):
+            self.params["bparm"].insert(0, None)
         self.task = AIPSTask("CLCAL")
 
     @classmethod
@@ -27,6 +29,10 @@ class Clcal(Plugin):
         # search for gainver
         if not source2ver(context, self.params, "CL"):
             return False
+        
+        # replace default parameter values
+        if "calsour" in self.params and self.params["calsour"] == "$MPC_AUTO$":
+            self.params["calsour"] = [None, context.get_context()["mpc_calsour"]["name"]]
 
         run_task(self.task, self.params)
         context.get_context()["loaded_plugins"]["AipsCatalog"].add_ext(context,

@@ -6,6 +6,7 @@ from astropy.time import Time
 
 from core.Plugin import Plugin
 from core.Context import Context
+from util.float_to_time_components import float_to_time_components
 
 
 class GetObsInfo(Plugin):
@@ -45,6 +46,11 @@ class GetObsInfo(Plugin):
         no_if = data.header.naxis[3]  # IF number
         no_chan = data.header.naxis[2]  # channel number per IF
 
+        fringe_finder_name = sources.loc[sources['ID'] == nx_table[0]['source_id'], 'NAME'].values[0].rstrip()
+        # NOTE AIPS timerange: the data points (~2 sec each usually) in a scan are not integrated, so, cover the whole scan!
+        first_scan_end_time = nx_table[0]['time']+nx_table[0]['time_interval']/2+1e-3  # add extra ~1 min (unit: d)
+        end_day, end_hour, end_minute, end_second = float_to_time_components(first_scan_end_time)
+
         context.edit_context({"antennas": antennas.to_dict(orient='records'),
                               "sources": sources.to_dict(orient='records'),
                               "obs_time": {"date": obs_date,
@@ -55,7 +61,12 @@ class GetObsInfo(Plugin):
                               "obs_freq": obs_freq,
                               "no_stokes": no_stokes,
                               "no_if": no_if,
-                              "no_chan": no_chan})
+                              "no_chan": no_chan,
+                              "mpc_calsour": {"name": fringe_finder_name,
+                                              "end_time": {"day": end_day,
+                                                           "hour": end_hour,
+                                                           "minute": end_minute,
+                                                           "second": end_second}}})
         
         # optional: LISTR & PRTAN
         if (("listr_outprint" in self.params) or ("prtan_outprint" in self.params)) and ("GeneralTask" not in context.get_context()["loaded_plugins"]):

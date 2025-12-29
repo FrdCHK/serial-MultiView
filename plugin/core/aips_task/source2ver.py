@@ -3,7 +3,7 @@ from typing import Dict, Any
 from core.Context import Context
 
 
-def source2ver(context: Context, params: Dict[str, Any], ext_type: str) -> bool:
+def source2ver(context: Context, params: Dict[str, Any], ext_type: str, new_cl_key: str="gainver") -> bool:
     """
     Search for extension version based on extension source. The version number is directly added to params.
     
@@ -13,6 +13,8 @@ def source2ver(context: Context, params: Dict[str, Any], ext_type: str) -> bool:
     :type params: Dict[str, Any]
     :param ext_type: extension type. SN or CL
     :type ext_type: str
+    :param new_cl_key: CL table key, 'gainver' or 'gainuse'. Defaults to 'gainver'.
+    :type new_cl_key: str
     :return: whether the search is successful
     :rtype: bool
     """
@@ -21,7 +23,7 @@ def source2ver(context: Context, params: Dict[str, Any], ext_type: str) -> bool:
         new_param_key = "snver"
     elif ext_type == "CL":
         ext_source_key = "cl_source"
-        new_param_key = "gainver"
+        new_param_key = new_cl_key
     else:
         return False
     ext_search_result = context.get_context()["loaded_plugins"]["AipsCatalog"].search_ext(context,

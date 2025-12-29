@@ -102,5 +102,35 @@ plugins:
       auto_ref_ant: {{ auto_ref_ant }}
 {# 2-charactor code used. Ignored if auto_ref_ant is True. #}
       ref_ant: {{ ref_ant }}
+{# manual phase calibration #}
+  - name: Fring
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      inseq: {{ uvdata_main_cat }}
+      calsour: $MPC_AUTO$
+      timerang: $MPC_AUTO$
+      refant: $DEFAULT$
+      aparm: [2, 0, 0, 0, 0, 0, 7]
+      dparm: [0, 0, 0, 0, 0, 0, 0, 1, 0]
+      solint: -1
+      docalib: 1
+      cl_source: TECOR
+      identifier: FRING(MPC)
+  - name: Clcal
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      inseq: {{ uvdata_main_cat }}
+      calsour: $MPC_AUTO$
+      opcode: CALP
+      interpol: AMBG
+      smotyp: VLBI
+      bparm: [0, 0, 1, 0]
+      sn_source: FRING(MPC)
+      cl_source: TECOR
+      identifier: CLCAL(MPC)
   - name: Exit
     params: {}
