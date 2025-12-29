@@ -12,8 +12,9 @@ class Tecor(Plugin):
     def __init__(self, params: Dict[str, Any]):
         """inname, inclass, indisk, inseq, identifier must be specified"""
         self.params = params
-        if "aparm" in self.params and isinstance(self.params["aparm"], list):
-            self.params["aparm"].insert(0, None)
+        for _, v in self.params.items():
+            if isinstance(v, list):
+                v.insert(0, None)
         self.task = AIPSTask("TECOR")
 
     @classmethod

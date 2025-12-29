@@ -12,14 +12,9 @@ class Fring(Plugin):
     def __init__(self, params: Dict[str, Any]):
         """inname, inclass, indisk, inseq, identifier must be specified"""
         self.params = params
-        if "calsour" in self.params and isinstance(self.params["calsour"], list):
-            self.params["calsour"].insert(0, None)
-        if "timerang" in self.params and isinstance(self.params["timerang"], list):
-            self.params["timerang"].insert(0, None)
-        if "aparm" in self.params and isinstance(self.params["aparm"], list):
-            self.params["aparm"].insert(0, None)
-        if "dparm" in self.params and isinstance(self.params["dparm"], list):
-            self.params["dparm"].insert(0, None)
+        for _, v in self.params.items():
+            if isinstance(v, list):
+                v.insert(0, None)
         self.task = AIPSTask("FRING")
 
     @classmethod

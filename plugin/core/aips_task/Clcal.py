@@ -12,8 +12,9 @@ class Clcal(Plugin):
     def __init__(self, params: Dict[str, Any]):
         """inname, inclass, indisk, inseq, sn_source, cl_source, identifier must be specified"""
         self.params = params
-        if "bparm" in self.params and isinstance(self.params["bparm"], list):
-            self.params["bparm"].insert(0, None)
+        for _, v in self.params.items():
+            if isinstance(v, list):
+                v.insert(0, None)
         self.task = AIPSTask("CLCAL")
 
     @classmethod

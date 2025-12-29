@@ -12,8 +12,9 @@ class Clcor(Plugin):
     def __init__(self, params: Dict[str, Any]):
         """inname, inclass, indisk, inseq, opcode, cl_source, identifier must be specified"""
         self.params = params
-        if "clcorprm" in self.params and isinstance(self.params["clcorprm"], list):
-            self.params["clcorprm"].insert(0, None)
+        for _, v in self.params.items():
+            if isinstance(v, list):
+                v.insert(0, None)
         self.task = AIPSTask("CLCOR")
 
     @classmethod
