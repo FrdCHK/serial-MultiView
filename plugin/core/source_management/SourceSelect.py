@@ -1,4 +1,5 @@
 import pandas as pd
+import yaml
 from typing import Dict, Any
 
 from core.Plugin import Plugin
@@ -23,12 +24,26 @@ class SourceSelect(Plugin):
         
         if self.params.get("load", None):
             # load sources from file (context of another experiment)
-            return True
+            try:
+                with open(self.params["load"], 'r') as f:
+                    predef = yaml.safe_load(f)
+            except Exception as e:
+                context.logger.warning(f"Failed to load predef source list file {self.params['load']}: {e}")
+                context.logger.info(f"Continue with manual selection")
+            else:
+                predef_targets = predef.get("targets", [])
+                if predef_targets:
+                    context.edit_context({"targets": predef_targets})
+                    context.logger.info(f"Predef source list file {self.params['load']} loaded successfully")
+                    return True
+                else:
+                    context.logger.warning(f"Predef source list file {self.params['load']} does not contain targets")
+                    context.logger.info(f"Continue with manual selection")
             # if encounter error, just catch and log it and continue with manual selection
         
         sources = pd.DataFrame(context.get_context()["sources"])
         target_num = integer_input("Please input the number of targets", 1)
-        selected_sources = []  # to avoid repeated selection
+        selected_sources = []  # to avoid duplicates
         targets = pd.DataFrame(columns=["ID", "NAME", "RA", "DEC"])
         context.edit_context({"targets": []})
         for i in range(target_num):
@@ -47,8 +62,7 @@ class SourceSelect(Plugin):
                     selected_sources.append(target_id)
                     targets.loc[targets.index.size] = (sources.loc[sources["ID"] == target_id]).iloc[0]
                     break
-            # config files for each target
-            target_config = {"ID": int(targets.loc[i, "ID"]), "NAME": str(targets.loc[i, "NAME"]),
+            target_item = {"ID": int(targets.loc[i, "ID"]), "NAME": str(targets.loc[i, "NAME"]),
                              "RA": float(targets.loc[i, "RA"]), "DEC": float(targets.loc[i, "DEC"])}
 
             # select calibrators for each target
@@ -61,11 +75,6 @@ class SourceSelect(Plugin):
                 for part in parts:
                     if is_integer(part):
                         int_part = int(part)
-                        # target can also be used as calibrator
-                        # if int_part in selected_sources:
-                        #     print(f"\033[31mSource {int_part} already selected!\033[0m")
-                        #     redo_flag = True
-                        #     break
                         if not (int_part in range(1, sources.index.size+1)):
                             print("\033[31mInvalid input!\033[0m")
                             redo_flag = True
@@ -80,8 +89,8 @@ class SourceSelect(Plugin):
                     int_part = int(part)
                     calibrators.loc[calibrators.index.size] = (sources.loc[sources["ID"] == int_part]).iloc[0]
                 break
-            target_config["CALIBRATORS"] = calibrators.to_dict()
-            context.get_context()["targets"].append(target_config)
+            target_item["CALIBRATORS"] = calibrators.to_dict()
+            context.get_context()["targets"].append(target_item)
 
         context.logger.info(f"Sources selected")
         return True

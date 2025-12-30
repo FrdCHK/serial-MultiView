@@ -138,7 +138,9 @@ plugins:
       inclass: UVDATA
       indisk: {{ indisk }}
       inseq: {{ uvdata_main_cat }}
-{# load: path/to/another/context.yaml #}
+{% if predef_source_list is defined %}
+      load: {{ predef_source_list }}
+{% endif %}
 {# for primary calibrator selection: possm: True #}
   - name: Exit
     params: {}
