@@ -142,6 +142,11 @@ plugins:
 {% if predef_source_list is defined %}
       load: {{ predef_source_list }}
 {% endif %}
-{# for primary calibrator selection: possm: True #}
+  - name: CalibratorSelfCalibration
+    params:
+      indisk: {{ indisk }}
+  - name: CalibratorFitsExport
+    params:
+      indisk: {{ indisk }}
   - name: Exit
     params: {}
