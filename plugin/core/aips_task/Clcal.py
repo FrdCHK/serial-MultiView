@@ -5,7 +5,6 @@ from core.Plugin import Plugin
 from core.Context import Context
 
 from .run_task import run_task
-from .source2ver import source2ver
 
 
 class Clcal(Plugin):
@@ -22,10 +21,10 @@ class Clcal(Plugin):
         context.logger.info("Start AIPS task CLCAL")
 
         # search for snver
-        if not source2ver(context, self.params, "SN"):
+        if not context.get_context()["loaded_plugins"]["AipsCatalog"].source2ver(context, self.params, "SN"):
             return False
         # search for gainver
-        if not source2ver(context, self.params, "CL"):
+        if not context.get_context()["loaded_plugins"]["AipsCatalog"].source2ver(context, self.params, "CL"):
             return False
         
         if not run_task(self.task, self.params, context):

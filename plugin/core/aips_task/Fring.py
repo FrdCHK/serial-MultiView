@@ -5,7 +5,6 @@ from core.Plugin import Plugin
 from core.Context import Context
 
 from .run_task import run_task
-from .source2ver import source2ver
 
 
 class Fring(Plugin):
@@ -22,7 +21,7 @@ class Fring(Plugin):
         context.logger.info("Start AIPS task FRING")
 
         # search for gainuse
-        if not source2ver(context, self.params, "CL", "gainuse"):
+        if not context.get_context()["loaded_plugins"]["AipsCatalog"].source2ver(context, self.params, "CL", "gainuse"):
             return False
 
         if not run_task(self.task, self.params, context):

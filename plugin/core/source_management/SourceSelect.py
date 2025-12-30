@@ -35,6 +35,8 @@ class SourceSelect(Plugin):
                 if predef_targets:
                     context.edit_context({"targets": predef_targets})
                     context.logger.info(f"Predef source list file {self.params['load']} loaded successfully")
+                    if not self.splat(context):
+                        return False
                     return True
                 else:
                     context.logger.warning(f"Predef source list file {self.params['load']} does not contain targets")
@@ -89,8 +91,34 @@ class SourceSelect(Plugin):
                     int_part = int(part)
                     calibrators.loc[calibrators.index.size] = (sources.loc[sources["ID"] == int_part]).iloc[0]
                 break
-            target_item["CALIBRATORS"] = calibrators.to_dict()
+            target_item["CALIBRATORS"] = calibrators.to_dict(orient='records')
             context.get_context()["targets"].append(target_item)
 
         context.logger.info(f"Sources selected")
+
+        if not self.splat(context):
+            return False
+        context.logger.info(f"Target & calibrators SPLAT finished")
+
+        return True
+    
+    def splat(self, context: Context) -> bool:
+        if not context.get_context()["loaded_plugins"]["AipsCatalog"].source2ver(context, self.params, "CL", "gainuse"):
+            context.logger.error(f"CL source not found in context")
+            return False
+        for target in context.get_context()["targets"]:
+            task = context.get_context()["loaded_plugins"]["GeneralTask"]({"task_name": "SPLAT",
+                                                                           "inname": self.params["inname"],
+                                                                           "inclass": self.params["inclass"],
+                                                                           "indisk": self.params["indisk"],
+                                                                           "inseq": self.params["inseq"],
+                                                                           "sources": [target["NAME"], *[calibrator["NAME"] for calibrator in target["CALIBRATORS"]]],
+                                                                           "docalib": 1,
+                                                                           "gainuse": self.params["gainuse"],
+                                                                           "outname": target["NAME"],
+                                                                           "outseq": 1,
+                                                                           "outdisk": self.params["indisk"]})
+            task.run(context)
+            if not context.get_context()["loaded_plugins"]["AipsCatalog"].add_catalog(context, target["NAME"], "SPLAT", self.params["indisk"], 1, "Created by SPLAT"):
+                return False
         return True

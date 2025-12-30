@@ -76,8 +76,12 @@ class AipsCatalog(Plugin):
             cat_seq = cls.get_highest_catalog_seq(context, cat_name, cat_class, cat_disk) + 1
         context.get_context()["aips_catalog"].append({"name": cat_name, "class": cat_class, "disk": cat_disk, "seq": cat_seq, "ext": [], "history": [history]})
         # if uv data, add CL1 to its ext list
-        if cat_class in ["UVDATA", "SPLAT", "SPLIT"]:
+        if cat_class == "UVDATA":
             context.get_context()["aips_catalog"][-1]["ext"].append({"type": "CL", "version": [{"num": 1, "source": "FITLD"}]})
+        elif cat_class == "SPLAT":
+            context.get_context()["aips_catalog"][-1]["ext"].append({"type": "CL", "version": [{"num": 1, "source": "SPLAT"}]})
+        elif cat_class == "SPLIT":
+            context.get_context()["aips_catalog"][-1]["ext"].append({"type": "CL", "version": [{"num": 1, "source": "SPLIT"}]})
         context.logger.debug(f"Catalog added: name={cat_name} class={cat_class} disk={cat_disk} seq={cat_seq}")
         return True
 
@@ -201,4 +205,41 @@ class AipsCatalog(Plugin):
         if del_reason != "":
             del_reason = f" ({del_reason})"
         cls.append_history(context, cat_name, cat_class, cat_disk, cat_seq, f"Deleted ext {ext_type}{ext_version}{del_reason}")
+        return True
+    
+    @classmethod
+    def source2ver(cls, context: Context, params: Dict[str, Any], ext_type: str, new_cl_key: str="gainver") -> bool:
+        """
+        Search for extension version based on extension source, and directly add to params. The version number is directly added to params.
+        
+        :param context: context instance
+        :type context: Context
+        :param params: parameters
+        :type params: Dict[str, Any]
+        :param ext_type: extension type. SN or CL
+        :type ext_type: str
+        :param new_cl_key: CL table key, 'gainver' or 'gainuse'. Defaults to 'gainver'.
+        :type new_cl_key: str
+        :return: whether the search is successful
+        :rtype: bool
+        """
+        if ext_type == "SN":
+            ext_source_key = "sn_source"
+            new_param_key = "snver"
+        elif ext_type == "CL":
+            ext_source_key = "cl_source"
+            new_param_key = new_cl_key
+        else:
+            return False
+        ext_search_result = cls.search_ext(context,
+                                           params["inname"],
+                                           params["inclass"],
+                                           params["indisk"],
+                                           params["inseq"],
+                                           ext_type,
+                                           ext_source=params[ext_source_key])
+        if not ext_search_result["status"]:
+            return False
+        params[new_param_key] = context.get_context()["aips_catalog"][ext_search_result["cat_index"]]["ext"][ext_search_result["ext_index"]]["version"][ext_search_result["ver_index"]]["num"]
+        params.pop(ext_source_key)
         return True
