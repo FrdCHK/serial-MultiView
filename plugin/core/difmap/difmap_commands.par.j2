@@ -1,0 +1,58 @@
+{# based on the example Difmap script written by Martin Shepherd and Greg Taylor on 3/15/1994 #}
+{# parameters must be specified in the template are: uv_file, IF_end, save_file_prefix #}
+float field_size; field_size = {{ field_size | default(512) }}
+float field_cell; field_cell = {{ field_cell | default(0.25) }}
+integer clean_niter; clean_niter = {{ clean_niter | default(50) }}
+float clean_gain; clean_gain = {{ clean_gain | default(0.03) }}
+float dynam;  dynam = {{ dynam | default(6.0) }}
+float soltime; soltime = {{ soltime | default(30) }}
+float win_mult; win_mult = {{ win_mult | default(1.8) }}
+
+float old_peak
+float new_peak
+float flux_cutoff
+
+#+map_residual \
+flux_cutoff = imstat(rms) * dynam;\
+repeat;\
+ if (peak(flux) > flux_cutoff) peakwin win_mult;\
+ clean clean_niter,clean_gain;\
+ flux_cutoff = imstat(rms) * dynam;\
+ selfcal;\
+ new_peak = peak(flux);\
+until(new_peak<=flux_cutoff)
+
+observe {{ uv_file }}
+
+select {{ stokes | default('I') }},{{ IF_start | default(1) }},{{ IF_end }}
+
+mapsize field_size, field_cell
+
+startmod
+
+uvw 2,-1
+map_residual
+
+uvw 0,-1
+win_mult = win_mult * 1.6
+clean_niter = clean_niter * 2
+dynam = dynam - 0.5
+map_residual
+
+gscale true
+dynam = dynam - 0.5
+map_residual
+
+selfcal true, true, soltime
+dynam = dynam - 0.75
+clean clean_niter,clean_gain
+selfcal
+map_residual
+
+mapcolor rainbow,1,0.6
+device {{ save_file_prefix }}.ps/{{ driver | default('VCPS') }}
+mapplot cln
+
+save {{ save_file_prefix }}
+
+quit
