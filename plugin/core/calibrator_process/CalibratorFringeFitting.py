@@ -2,13 +2,13 @@ from core.Plugin import Plugin
 from core.Context import Context
 
 
-class CalibratorSelfCalibration(Plugin):
+class CalibratorFringeFitting(Plugin):
     @classmethod
     def get_description(cls) -> str:
-        return "Self calibration for all calibrators. Plugin required: Fring. Plugin SourceSelect must be run before."
+        return "Fringe fitting for all calibrators. Plugin required: Fring. Plugin SourceSelect must be run before."
 
     def run(self, context: Context) -> bool:
-        context.logger.info("Start calibrator self calibration")
+        context.logger.info("Start calibrator fringe fitting")
 
         if not context.get_context().get("targets", []):
             context.logger.error("No targets found in the context")
@@ -42,7 +42,7 @@ class CalibratorSelfCalibration(Plugin):
                                                                                "cl_source": "SPLAT",
                                                                                "identifier": f"CLCAL(FRING({calibrator['NAME']}))"})
                 task_clcal.run(context)
-                context.logger.info(f"Calibrator {calibrator['NAME']} self calibration done")
+                context.logger.info(f"Calibrator {calibrator['NAME']} fringe fitting done")
 
-        context.logger.info("Calibrator self calibration finished")
+        context.logger.info("Calibrator fringe fitting finished")
         return True
