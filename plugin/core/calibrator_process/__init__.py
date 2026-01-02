@@ -1,1 +1,1 @@
-from . import CalibratorSelfCalibration
+from . import CalibratorFringeFitting

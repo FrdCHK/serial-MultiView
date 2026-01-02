@@ -4,3 +4,5 @@ log/*
 test/*
 pytest.ini
 *.par
+*.log
+*.log_*
