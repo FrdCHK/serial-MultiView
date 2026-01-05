@@ -10,10 +10,15 @@ from util.yes_no_input import yes_no_input
 class RefAntSelect(Plugin):
     @classmethod
     def get_description(cls) -> str:
-        return "Select reference antenna. Plugin required: GeneralTask."
+        return "Select reference antenna. " \
+               "Plugins required: AipsCatalog, GetObsInfo, GeneralTask." \
+               "Parameters required: inname, inclass, indisk, in_cat_ident, auto_ref_ant; optional: ref_ant."
     
     def run(self, context: Context) -> bool:
         context.logger.info(f"Start selecting reference antenna")
+
+        if "in_cat_ident" in self.params:
+            context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, self.params)
         
         if self.params["auto_ref_ant"]:
             # auto selection

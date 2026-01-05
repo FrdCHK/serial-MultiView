@@ -1,45 +1,20 @@
-# import yaml
-# import os
 from typing import Dict, Any, Union
 
 from core.Plugin import Plugin
 from core.Context import Context
-# from util.check_path_availability import check_path_availability
 
 
 class AipsCatalog(Plugin):
     @classmethod
     def get_description(cls) -> str:
-        return "manage AIPS catalog and extension file information"
+        return "Manage AIPS catalog and extension file information."
 
     def run(self, context: Context) -> bool:
         """This run method is only for context init"""
         context.logger.info("Start AIPS catalog and extension file information init")
-        # workspace_path = context.get_context()["config"]["workspace"]
-        # if not workspace_path:
-        #     context.logger.error("Workspace not defined")
-        #     return False
-        # else:
-        #     catalog_path = os.path.join(workspace_path, "aips_catalog.yaml")
-        #     if check_path_availability(catalog_path) == 'file':
-        #         with open(catalog_path, "r") as f:
-        #             catalog = yaml.safe_load(f)
-        #         if catalog is None:
-        #             catalog = []
-        #         context.edit_context({"aips_catalog": catalog})
-        #     else:
-        #         context.edit_context({"aips_catalog": []})
         if context.get_context().get("aips_catalog") is None:
             context.edit_context({"aips_catalog": []})
         return True
-
-    # @classmethod
-    # def save_catalog(cls, context: Context) -> bool:
-    #     catalog_path = os.path.join(context.get_context()["config"]["workspace"], "aips_catalog.yaml")
-    #     with open(catalog_path, "w") as f:
-    #         yaml.safe_dump(context.get_context().get("aips_catalog", []), f)
-    #     context.logger.info(f"AIPS catalog saved to {catalog_path}")
-    #     return True
 
     @classmethod
     def search_catalog(cls, context: Context, cat_name: str, cat_class: str, cat_disk: int, cat_seq: int) -> int:
@@ -61,13 +36,13 @@ class AipsCatalog(Plugin):
         return highst_seq
 
     @classmethod
-    def add_catalog(cls, context: Context, cat_name: str, cat_class: str, cat_disk: int, cat_seq: int=0, history: str="Created") -> bool:
+    def add_catalog(cls, context: Context, cat_name: str, cat_class: str, cat_disk: int, cat_ident: str, cat_seq: int=0, history: str="Created") -> bool:
         if cat_seq > 0 and cls.search_catalog(context, cat_name, cat_class, cat_disk, cat_seq) >= 0:
             context.logger.error(f"Catalog already exists: name={cat_name} class={cat_class} disk={cat_disk} seq={cat_seq}")
             return False
         if cat_seq == 0:
             cat_seq = cls.get_highest_catalog_seq(context, cat_name, cat_class, cat_disk) + 1
-        context.get_context()["aips_catalog"].append({"name": cat_name, "class": cat_class, "disk": cat_disk, "seq": cat_seq, "ext": [], "history": [history]})
+        context.get_context()["aips_catalog"].append({"name": cat_name, "class": cat_class, "disk": cat_disk, "ident": cat_ident, "seq": cat_seq, "ext": [], "history": [history]})
         # if uv data, add CL1 to its ext list
         if cat_class == "UVDATA":
             context.get_context()["aips_catalog"][-1]["ext"].append({"type": "CL", "version": [{"num": 1, "source": "FITLD"}]})
@@ -199,6 +174,33 @@ class AipsCatalog(Plugin):
             del_reason = f" ({del_reason})"
         cls.append_history(context, cat_name, cat_class, cat_disk, cat_seq, f"Deleted ext {ext_type}{ext_version}{del_reason}")
         return True
+    
+    @classmethod
+    def ident2cat(cls, context: Context, params: Dict[str, Any], old_key: str="in_cat_ident", new_key: str="inseq") -> bool:
+        """
+        Replace catalog identification with catalog sequence number.
+        
+        :param context: context instance
+        :type context: Context
+        :param params: parameters
+        :type params: Dict[str, Any]
+        :param old_key: the key used in template file, "in_cat_ident" or "out_cat_ident". Defaults to "in_cat_ident".
+        :type old_key: str
+        :param new_key: AIPS parameter name, "inseq" or "outseq". Defaults to "inseq".
+        :type new_key: str
+        :return: whether the replacement is successful
+        :rtype: bool
+        """
+        if params[old_key]:
+            for catalog in context.get_context()["aips_catalog"]:
+                if catalog["ident"] == params[old_key]:
+                    params[new_key] = catalog["seq"]
+                    params.pop(old_key)
+                    return True
+            context.logger.error(f"Catalog not found: ident={params[old_key]}")
+            return False
+        context.logger.error(f"Key not found in params: {old_key}")
+        return False
     
     @classmethod
     def source2ver(cls, context: Context, params: Dict[str, Any], ext_type: str, new_cl_key: str="gainver") -> bool:

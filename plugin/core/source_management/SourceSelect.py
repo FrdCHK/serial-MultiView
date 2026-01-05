@@ -10,10 +10,14 @@ from util.integer_input import integer_input, is_integer
 class SourceSelect(Plugin):
     @classmethod
     def get_description(cls) -> str:
-        return "Select target and calibrator sources. Plugin required: GeneralTask, AipsCalog."
+        return "Select target and calibrator sources. " \
+        "Plugins required: AipsCatlog, GetObsInfo, GeneralTask."
     
     def run(self, context: Context) -> bool:
         context.logger.info(f"Start selecting sources")
+
+        if "in_cat_ident" in self.params:
+            context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, self.params)
         
         if self.params.get("load", None):
             # load sources from file (context of another experiment)
@@ -115,10 +119,14 @@ class SourceSelect(Plugin):
                                                                            "docalib": 1,
                                                                            "gainuse": self.params["gainuse"],
                                                                            "outname": target["NAME"],
-                                                                           "outseq": 1,
                                                                            "outdisk": self.params["indisk"]})
             task.run(context)
-            if not context.get_context()["loaded_plugins"]["AipsCatalog"].add_catalog(context, target["NAME"], "SPLAT", self.params["indisk"], 1, "Created by SPLAT"):
+            if not context.get_context()["loaded_plugins"]["AipsCatalog"].add_catalog(context,
+                                                                                      target["NAME"],
+                                                                                      "SPLAT",
+                                                                                      self.params["indisk"],
+                                                                                      f"{target['NAME']} WITH CALIBRATORS",
+                                                                                      history="Created by SPLAT"):
                 return False
         return True
 

@@ -14,10 +14,10 @@ from core.Context import Context
 class Difmap(Plugin):
     @classmethod
     def get_description(cls) -> str:
-        return "Call difmap to clean and self calibrate the calibrator maps."
+        return "Call difmap to clean and self calibrate the calibrator maps. Difmap must be installed and can be called through command 'difmap'."
     
     def run(self, context: Context) -> bool:
-        # TODO : add adjustable parameters from config
+        # TODO : add adjustable parameters from config & progress log info
         context.logger.info(f"Start calibrator self-calibration with Difmap")
 
         env = Environment(loader=FileSystemLoader(os.path.dirname(os.path.abspath(__file__))), trim_blocks=True, keep_trailing_newline=True)

@@ -9,16 +9,20 @@ from .run_task import run_task
 
 class Clcor(Plugin):
     def __init__(self, params: Dict[str, Any]):
-        """inname, inclass, indisk, inseq, opcode, cl_source, identifier must be specified"""
         self.params = params
         self.task = AIPSTask("CLCOR")
 
     @classmethod
     def get_description(cls) -> str:
-        return "Task to make a number of different corrections to a CL table."
+        return "Task to make a number of different corrections to a CL table. " \
+               "Plugin required: AipsCatalog. " \
+               "Parameters required: inname, inclass, indisk, in_cat_ident, opcode, identifier."
     
     def run(self, context: Context) -> bool:
         context.logger.info("Start AIPS task CLCOR")
+
+        if "in_cat_ident" in self.params:
+            context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, self.params)
 
         # search for gainver
         if not context.get_context()["loaded_plugins"]["AipsCatalog"].source2ver(context, self.params, "CL"):

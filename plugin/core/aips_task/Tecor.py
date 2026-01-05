@@ -16,10 +16,16 @@ class Tecor(Plugin):
 
     @classmethod
     def get_description(cls) -> str:
-        return "Task to derive corrections for ionospheric Faraday rotation and dispersive delay from maps of total electron content in IONEX format."
+        return "Task to derive corrections for ionospheric Faraday rotation and dispersive delay from maps of total electron content in IONEX format. " \
+               "Plugins required: AipsCatalog, GetObsInfo. " \
+               "Parameters required: inname, inclass, indisk, in_cat_ident, cl_source, identifier."
     
     def run(self, context: Context) -> bool:
         context.logger.info("Start AIPS task TECOR")
+
+        if "in_cat_ident" in self.params:
+            context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, self.params)
+
         d = context.get_context()["obs_time"]["date"]
         year = d.year
         doy = d.timetuple().tm_yday

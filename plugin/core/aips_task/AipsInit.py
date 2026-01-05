@@ -7,7 +7,7 @@ from core.Context import Context
 class AipsInit(Plugin):
     @classmethod
     def get_description(cls) -> str:
-        return "set AIPS userno"
+        return "Set AIPS userno."
     
     def run(self, context: Context) -> bool:
         aips_userno = self.params.get("userno", 1)

@@ -12,11 +12,15 @@ class GetObsInfo(Plugin):
     @classmethod
     def get_description(cls) -> str:
         return "Get observation information from catalog. " \
-               "Plugin required: GeneralTask. " \
+               "Plugins required: AipsCatalog; optional: GeneralTask (if LISTR & PRTAN are needed). " \
                "Parameters required: inname, inclass, inseq, indisk; optional: listr_outprint, listr_optype, prtan_outprint."
     
     def run(self, context: Context) -> bool:
         context.logger.info(f"Start reading observation information from catalog")
+
+        if "in_cat_ident" in self.params:
+            context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, self.params)
+
         data = AIPSUVData(self.params["inname"], self.params["inclass"], int(self.params["indisk"]), int(self.params["inseq"]))
         antennas = data.antennas
         antennas = pd.DataFrame({"ID": range(1, len(antennas) + 1), "NAME": antennas})

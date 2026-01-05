@@ -10,7 +10,9 @@ from core.Context import Context
 class Eop(Plugin):
     @classmethod
     def get_description(cls) -> str:
-        return "Check EOP file availability. Download EOP file if not available. A parameter eop_path is required."
+        return "Check EOP file availability. Download EOP file if not available. " \
+               "Plugin required: GetObsInfo." \
+               "Parameter required: eop_path."
     
     def run(self, context: Context) -> bool:
         context.logger.info("Start EOP file preparation")

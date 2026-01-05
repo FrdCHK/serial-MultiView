@@ -9,16 +9,21 @@ from .run_task import run_task
 
 class Accor(Plugin):
     def __init__(self, params: Dict[str, Any]):
-        """inname, inclass, indisk, inseq, identifier must be specified"""
         self.params = params
         self.task = AIPSTask("ACCOR")
 
     @classmethod
     def get_description(cls) -> str:
-        return "Task to correct amplitudes in cross-correlation spectra due to errors in sampler thresholds."
+        return "Task to correct amplitudes in cross-correlation spectra due to errors in sampler thresholds. " \
+               "Plugin required: AipsCatalog. " \
+               "Parameters required: inname, inclass, indisk, in_cat_ident, identifier."
     
     def run(self, context: Context) -> bool:
         context.logger.info("Start AIPS task ACCOR")
+
+        if "in_cat_ident" in self.params:
+            context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, self.params)
+
         if not run_task(self.task, self.params, context):
             return False
         context.get_context()["loaded_plugins"]["AipsCatalog"].add_ext(context,

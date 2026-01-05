@@ -11,7 +11,9 @@ from util.unzip import unzip
 class Ionex(Plugin):
     @classmethod
     def get_description(cls) -> str:
-        return "Check ionex file availability. Download ionex file if not available. A parameter ionex_dir is required."
+        return "Check ionex file availability. Download ionex file if not available. " \
+               "Plugin required: GetObsInfo." \
+               "Parameter required: ionex_dir."
     
     def run(self, context: Context) -> bool:
         context.logger.info(f"Start ionex file preparation")

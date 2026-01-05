@@ -4,8 +4,6 @@ config:
   {{ key }}: {{ config[key] }}
 {% endfor %}
 plugins:
-{#  - name: CreateDirectories
-    params: {} #}
   - name: AipsCatalog
     params: {}
   - name: AipsInit
@@ -16,13 +14,13 @@ plugins:
       datain: {{ idifits }}
       outname: {{ exp_name }}
       outclass: UVDATA
-{% set uvdata_main_cat = 1 %}
+      out_cat_ident: ORIGIN
   - name: GetObsInfo
     params:
       inname: {{ exp_name }}
       inclass: UVDATA
       indisk: {{ indisk }}
-      inseq: {{ uvdata_main_cat }}
+      in_cat_ident: ORIGIN
       listr_outprint: {{ workspace }}/scan.txt
       prtan_outprint: {{ workspace }}/antenna.txt
   - name: Accor
@@ -30,14 +28,14 @@ plugins:
       inname: {{ exp_name }}
       inclass: UVDATA
       indisk: {{ indisk }}
-      inseq: {{ uvdata_main_cat }}
+      in_cat_ident: ORIGIN
       identifier: ACCOR
   - name: Clcal
     params:
       inname: {{ exp_name }}
       inclass: UVDATA
       indisk: {{ indisk }}
-      inseq: {{ uvdata_main_cat }}
+      in_cat_ident: ORIGIN
       sn_source: ACCOR
       cl_source: FITLD
       identifier: CLCAL(ACCOR)
@@ -46,14 +44,14 @@ plugins:
       inname: {{ exp_name }}
       inclass: UVDATA
       indisk: {{ indisk }}
-      inseq: {{ uvdata_main_cat }}
+      in_cat_ident: ORIGIN
       identifier: APCAL
   - name: Clcal
     params:
       inname: {{ exp_name }}
       inclass: UVDATA
       indisk: {{ indisk }}
-      inseq: {{ uvdata_main_cat }}
+      in_cat_ident: ORIGIN
       sn_source: APCAL
       cl_source: CLCAL(ACCOR)
       identifier: CLCAL(APCAL)
@@ -62,7 +60,7 @@ plugins:
       inname: {{ exp_name }}
       inclass: UVDATA
       indisk: {{ indisk }}
-      inseq: {{ uvdata_main_cat }}
+      in_cat_ident: ORIGIN
       opcode: PANG
       clcorprm: [1, 0]
       cl_source: CLCAL(APCAL)
@@ -75,7 +73,7 @@ plugins:
       inname: {{ exp_name }}
       inclass: UVDATA
       indisk: {{ indisk }}
-      inseq: {{ uvdata_main_cat }}
+      in_cat_ident: ORIGIN
       opcode: EOPS
       infile: {{ eop_path }}
       cl_source: CLCOR(PANG)
@@ -88,7 +86,7 @@ plugins:
       inname: {{ exp_name }}
       inclass: UVDATA
       indisk: {{ indisk }}
-      inseq: {{ uvdata_main_cat }}
+      in_cat_ident: ORIGIN
       aparm: [1, 0]
       cl_source: CLCOR(EOPS)
       identifier: TECOR
@@ -97,7 +95,7 @@ plugins:
       inname: {{ exp_name }}
       inclass: UVDATA
       indisk: {{ indisk }}
-      inseq: {{ uvdata_main_cat }}
+      in_cat_ident: ORIGIN
 {# Only works for VLBA, and TY&WX tables will be read to assess data quality. If False, ref_ant must be specified. #}
       auto_ref_ant: {{ auto_ref_ant }}
 {# 2-charactor code used. Ignored if auto_ref_ant is True. #}
@@ -108,9 +106,11 @@ plugins:
       inname: {{ exp_name }}
       inclass: UVDATA
       indisk: {{ indisk }}
-      inseq: {{ uvdata_main_cat }}
+      in_cat_ident: ORIGIN
+{# $mpc_calsour$ is automatically set in plugin GetObsInfo #}
       calsour: [$mpc_calsour:name$]
       timerang: [0, 0, 0, 0, $mpc_calsour:end_time:day$, $mpc_calsour:end_time:hour$, $mpc_calsour:end_time:minute$, $mpc_calsour:end_time:second$]
+{# $ref_ant$ is set in plugin RefAntSelect #}
       refant: $ref_ant:ID$
       aparm: [2, 0, 0, 0, 0, 0, 7]
       dparm: [0, 0, 0, 0, 0, 0, 0, 1, 0]
@@ -123,7 +123,7 @@ plugins:
       inname: {{ exp_name }}
       inclass: UVDATA
       indisk: {{ indisk }}
-      inseq: {{ uvdata_main_cat }}
+      in_cat_ident: ORIGIN
       calsour: [$mpc_calsour:name$]
       opcode: CALP
       interpol: AMBG
@@ -137,7 +137,7 @@ plugins:
       inname: {{ exp_name }}
       inclass: UVDATA
       indisk: {{ indisk }}
-      inseq: {{ uvdata_main_cat }}
+      in_cat_ident: ORIGIN
       cl_source: CLCAL(MPC)
 {% if predef_source_list is defined %}
       load: {{ predef_source_list }}
