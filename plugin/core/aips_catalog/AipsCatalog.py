@@ -8,13 +8,6 @@ from core.Context import Context
 
 
 class AipsCatalog(Plugin):
-    def __init__(self, params: Dict[str, Any] = {"catalog_file": "aips_catalog.yaml"}):
-        """
-        initiate the plugin
-        :param params: parameters for the plugin
-        """
-        self.params = params
-
     @classmethod
     def get_description(cls) -> str:
         return "manage AIPS catalog and extension file information"

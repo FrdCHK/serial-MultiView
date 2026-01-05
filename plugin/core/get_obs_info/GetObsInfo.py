@@ -1,4 +1,3 @@
-from typing import Dict, Any
 from AIPSData import AIPSUVData
 import pandas as pd
 from datetime import datetime
@@ -10,13 +9,11 @@ from util.float_to_time_components import float_to_time_components
 
 
 class GetObsInfo(Plugin):
-    def __init__(self, params: Dict[str, Any]):
-        """inname, inclass, inseq, and indisk must be specified; optional: listr_outprint, listr_optype, prtan_outprint"""
-        self.params = params
-
     @classmethod
     def get_description(cls) -> str:
-        return "Get observation information from catalog. Plugin required: GeneralTask."
+        return "Get observation information from catalog. " \
+               "Plugin required: GeneralTask. " \
+               "Parameters required: inname, inclass, inseq, indisk; optional: listr_outprint, listr_optype, prtan_outprint."
     
     def run(self, context: Context) -> bool:
         context.logger.info(f"Start reading observation information from catalog")

@@ -1,4 +1,4 @@
-from typing import Dict, Any, Tuple
+from typing import Tuple
 from AIPSData import AIPSUVData
 import AIPSTV
 
@@ -8,13 +8,6 @@ from util.yes_no_input import yes_no_input
 
 
 class RefAntSelect(Plugin):
-    def __init__(self, params: Dict[str, Any]):
-        """
-        initiate the plugin
-        :param params: parameters for the plugin
-        """
-        self.params = params
-
     @classmethod
     def get_description(cls) -> str:
         return "Select reference antenna. Plugin required: GeneralTask."

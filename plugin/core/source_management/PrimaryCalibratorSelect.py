@@ -1,5 +1,4 @@
 import pandas as pd
-from typing import Dict, Any, Tuple
 from AIPSData import AIPSUVData
 import AIPSTV
 
@@ -9,13 +8,6 @@ from util.integer_input import integer_input, is_integer
 
 
 class SourceSelect(Plugin):
-    def __init__(self, params: Dict[str, Any]):
-        """
-        initiate the plugin
-        :param params: parameters for the plugin
-        """
-        self.params = params
-
     @classmethod
     def get_description(cls) -> str:
         return "Select primary calibrator."
