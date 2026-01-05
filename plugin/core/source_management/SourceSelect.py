@@ -33,6 +33,8 @@ class SourceSelect(Plugin):
             else:
                 predef_targets = predef.get("targets", [])
                 if predef_targets:
+                    # replace IDs in predef list with the actual IDs of these sources in the current experiment
+                    self.replace_source_id(predef_targets, context)
                     context.edit_context({"targets": predef_targets})
                     context.logger.info(f"Predef source list file {self.params['load']} loaded successfully")
                     if not self.splat(context):
@@ -44,7 +46,11 @@ class SourceSelect(Plugin):
             # if encounter error, just catch and log it and continue with manual selection
         
         sources = pd.DataFrame(context.get_context()["sources"])
-        target_num = integer_input("Please input the number of targets", 1)
+        while True:
+            target_num = integer_input("Please input the number of targets", 1)
+            if target_num > 0:
+                break
+            print("\033[31mTarget number should be > 0!\033[0m")
         selected_sources = []  # to avoid duplicates
         targets = pd.DataFrame(columns=["ID", "NAME", "RA", "DEC"])
         context.edit_context({"targets": []})
@@ -122,3 +128,23 @@ class SourceSelect(Plugin):
             if not context.get_context()["loaded_plugins"]["AipsCatalog"].add_catalog(context, target["NAME"], "SPLAT", self.params["indisk"], 1, "Created by SPLAT"):
                 return False
         return True
+
+    @classmethod
+    def replace_source_id(cls, obj, context: Context) -> Any:
+        if isinstance(obj, dict):
+            if ("ID" in obj) and ("NAME" in obj):
+                for source in context.get_context()["sources"]:
+                    if source["NAME"] == obj["NAME"]:
+                        obj["ID"] = source["ID"]
+                        break
+            return {
+                key: cls.replace_source_id(value, context)
+                for key, value in obj.items()
+            }
+        elif isinstance(obj, list):
+            return [
+                cls.replace_source_id(item, context)
+                for item in obj
+            ]
+        else:
+            return obj
