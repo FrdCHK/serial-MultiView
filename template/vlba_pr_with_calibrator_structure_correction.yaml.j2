@@ -145,10 +145,21 @@ plugins:
   - name: CalibratorFringeFitting
     params:
       indisk: {{ indisk }}
+{# FRING parameters #}
+      aparm: [2, 0, 1, 0, 0, 0, 7]
+      dparm: [0]
+      solint: -1
+{# CLCAL parameters #}
+      opcode: CALP
+      interpol: AMBG
+      smotyp: VLBI
+      bparm: [0, 0, 1, 0]
   - name: CalibratorFitsExport
     params:
       indisk: {{ indisk }}
-{# Difmap must be installed and can be called through command 'difmap' #}
+{# SPLIT parameters #}
+      aparm: [2, 0]
+{# Difmap must be installed and can be called through command 'difmap'. Set an alias in your .bashrc (or those for other shells) file if needed. #}
   - name: Difmap
     params: {}
   - name: Exit

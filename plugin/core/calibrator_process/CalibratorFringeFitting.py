@@ -22,9 +22,9 @@ class CalibratorFringeFitting(Plugin):
                                                                                "calsour": [calibrator["NAME"]],
                                                                                "timerang": [0],
                                                                                "refant": context.get_context()["ref_ant"]["ID"],
-                                                                               "aparm": [2, 0, 1, 0, 0, 0, 7],
-                                                                               "dparm": [0],
-                                                                               "solint": -1,
+                                                                               "aparm": self.params["aparm"],
+                                                                               "dparm": self.params["dparm"],
+                                                                               "solint": self.params["solint"],
                                                                                "docalib": -1,
                                                                                "identifier": f"FRING({calibrator['NAME']})"})
                 task_fring.run(context)
@@ -34,10 +34,10 @@ class CalibratorFringeFitting(Plugin):
                                                                                "inseq": 1,
                                                                                "calsour": [calibrator["NAME"]],
                                                                                "sources": [calibrator["NAME"]],
-                                                                               "opcode": "CALP",
-                                                                               "interpol": "AMBG",
-                                                                               "smotyp": "VLBI",
-                                                                               "bparm": [0, 0, 1, 0],
+                                                                               "opcode": self.params["opcode"],
+                                                                               "interpol": self.params["interpol"],
+                                                                               "smotyp": self.params["smotyp"],
+                                                                               "bparm": self.params["bparm"],
                                                                                "sn_source": f"FRING({calibrator['NAME']})",
                                                                                "cl_source": "SPLAT",
                                                                                "identifier": f"CLCAL(FRING({calibrator['NAME']}))"})

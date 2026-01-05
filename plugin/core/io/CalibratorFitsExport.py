@@ -38,7 +38,7 @@ class CalibratorFitsExport(Plugin):
                                                                                      "sources": [calibrator["NAME"]],
                                                                                      "docalib": 1,
                                                                                      "gainuse": params["gainuse"],
-                                                                                     "aparm": [2, 0],
+                                                                                     "aparm": self.params["aparm"],
                                                                                      "outdisk": self.params["indisk"],
                                                                                      "outseq": 1})
                 task_split.run(context)
