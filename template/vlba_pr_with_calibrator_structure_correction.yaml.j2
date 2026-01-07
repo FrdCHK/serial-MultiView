@@ -142,7 +142,7 @@ plugins:
 {% if predef_source_list is defined %}
       load: {{ predef_source_list }}
 {% endif %}
-  - name: CalibratorFringeFitting
+  - name: PRCalibratorFringeFitting
     params:
       indisk: {{ indisk }}
 {# FRING parameters #}
@@ -154,13 +154,13 @@ plugins:
       interpol: AMBG
       smotyp: VLBI
       bparm: [0, 0, 1, 0]
-  - name: CalibratorFitsExport
+  - name: PRCalibratorFitsExport
     params:
       indisk: {{ indisk }}
 {# SPLIT parameters #}
       aparm: [2, 0]
 {# Difmap must be installed and can be called through command 'difmap'. Set an alias in your .bashrc (or those for other shells) file if needed. #}
-  - name: Difmap
+  - name: PRCalibratorMapping
     params: {}
   - name: Exit
     params: {}

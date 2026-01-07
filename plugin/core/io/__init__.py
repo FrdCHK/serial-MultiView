@@ -1,1 +1,1 @@
-from . import CalibratorFitsExport
+from . import FitsExport

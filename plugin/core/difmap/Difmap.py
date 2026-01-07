@@ -14,60 +14,61 @@ from core.Context import Context
 class Difmap(Plugin):
     @classmethod
     def get_description(cls) -> str:
-        return "Call difmap to clean and self calibrate the calibrator maps. Difmap must be installed and can be called through command 'difmap'."
+        return "Call difmap to clean and self calibrate the calibrator maps. Difmap must be installed and can be called through command 'difmap'. " \
+        "Plugins required: GetObsInfo."
     
     def run(self, context: Context) -> bool:
-        # TODO : add adjustable parameters from config & progress log info
-        context.logger.info(f"Start calibrator self-calibration with Difmap")
+        context.logger.info(f"This run funtion does nothing. Please use the classmethod map() instead.")
+        return True
+
+    @classmethod
+    def map(cls, context: Context, dir: str, source_name: str) -> bool:
+        context.logger.info(f"Start source {source_name} mapping with Difmap")
 
         env = Environment(loader=FileSystemLoader(os.path.dirname(os.path.abspath(__file__))), trim_blocks=True, keep_trailing_newline=True)
-
         shallow_template = env.get_template("shallow_clean.par.j2")
         deep_template = env.get_template("deep_clean.par.j2")
-        workspace_dir = context.get_context()["config"]["workspace"]
-        targets_dir = os.path.join(workspace_dir, "targets")
         try:
             # pgplot cannot accept long path, so create a temp link to the targets directory
             pg_link = "pg_link"
             if not os.path.exists(pg_link):
-                os.symlink(targets_dir, pg_link)
+                os.symlink(dir, pg_link)
             elif os.path.exists(pg_link) and (not os.path.islink(pg_link)):
                 context.logger.error(f"Failed to create symlink for PGPLOT: {pg_link} already exists and is not a symlink")
                 return False
-            for target in context.get_context().get("targets"):
-                target_dir = os.path.join(pg_link, target["NAME"])
-                calibrators_dir = os.path.join(target_dir, "calibrators")
-                for calibrator in target["CALIBRATORS"]:
-                    # shallow clean
-                    config = {"uv_file": os.path.join(calibrators_dir, f"{calibrator['NAME']}_FITTP.fits"),
-                              "IF_end": context.get_context()["no_if"],
-                              "save_file_prefix": os.path.join(calibrators_dir, f"{calibrator['NAME']}_shallow"),
-                              "field_cell": 2/context.get_context()["obs_freq"]}  # the cell size is based on typical VLBA value
-                    par = shallow_template.render(**config)
-                    par_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "difmap_commands.par")
-                    with open(par_path, 'w') as file:
-                        file.write(par)
-                    imstat = self.run_difmap(par_path)
-                    os.remove(par_path)
-                    # determine the field size
-                    field_size, _ = self.auto_fov_shrink(context, os.path.join(calibrators_dir, f"{calibrator['NAME']}_shallow.fits"), imstat["rms"])
-                    for filename in os.listdir(calibrators_dir):
-                        if filename.startswith(f"{calibrator['NAME']}_shallow"):
-                            os.remove(os.path.join(calibrators_dir, filename))
-                    # deep clean
-                    config = {"uv_file": os.path.join(calibrators_dir, f"{calibrator['NAME']}_FITTP.fits"),
-                              "IF_end": context.get_context()["no_if"],
-                              "save_file_prefix": os.path.join(calibrators_dir, f"{calibrator['NAME']}_selfcal"),
-                              "field_size": field_size*2,
-                              "field_cell": imstat["bmin"]/5}  # Difmap halves the actual field size due to algorithm issue
-                    par = deep_template.render(**config)
-                    par_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "difmap_commands.par")
-                    with open(par_path, 'w') as file:
-                        file.write(par)
-                    imstat = self.run_difmap(par_path)
-                    os.remove(par_path)
+            
+            # shallow clean
+            config = {"uv_file": os.path.join(pg_link, f"{source_name}_FITTP.fits"),
+                      "IF_end": context.get_context()["no_if"],
+                      "save_file_prefix": os.path.join(pg_link, f"{source_name}_shallow"),
+                      "field_cell": 2/context.get_context()["obs_freq"]}  # the cell size is based on typical VLBA value
+            par = shallow_template.render(**config)
+            par_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "difmap_commands.par")
+            with open(par_path, 'w') as file:
+                file.write(par)
+            imstat = cls.run_difmap(par_path)
+            os.remove(par_path)
+
+            # determine the field size
+            field_size, _ = cls.auto_fov_shrink(context, os.path.join(pg_link, f"{source_name}_shallow.fits"), imstat["rms"])
+            for filename in os.listdir(pg_link):
+                if filename.startswith(f"{source_name}_shallow"):
+                    os.remove(os.path.join(pg_link, filename))
+            
+            # deep clean
+            config = {"uv_file": os.path.join(pg_link, f"{source_name}_FITTP.fits"),
+                      "IF_end": context.get_context()["no_if"],
+                      "save_file_prefix": os.path.join(pg_link, f"{source_name}_selfcal"),
+                      "field_size": field_size*2,  # Difmap halves the actual field size due to a clean algorithm issue
+                      "field_cell": imstat["bmin"]/5}
+            par = deep_template.render(**config)
+            par_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "difmap_commands.par")
+            with open(par_path, 'w') as file:
+                file.write(par)
+            imstat = cls.run_difmap(par_path)
+            os.remove(par_path)
         except Exception as e:
-            context.logger.info(f"Error in calibrator self-calibration: {e}")
+            context.logger.error(f"Error in source {source_name} mapping: {e}")
             return False
         finally:
             if os.path.islink(pg_link):
@@ -75,8 +76,8 @@ class Difmap(Plugin):
             for filename in os.listdir(os.getcwd()):
                 if filename.startswith("difmap.log"):
                     os.remove(os.path.join(os.getcwd(), filename))
-
-        context.logger.info(f"Calibrator self-calibration finished")
+        
+        context.logger.info(f"Source {source_name} mapping finished")
         return True
 
     @staticmethod

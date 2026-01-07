@@ -2,7 +2,7 @@ from core.Plugin import Plugin
 from core.Context import Context
 
 
-class CalibratorFringeFitting(Plugin):
+class PRCalibratorFringeFitting(Plugin):
     @classmethod
     def get_description(cls) -> str:
         return "Fringe fitting for all calibrators. Plugin SourceSelect must be run before." \
@@ -10,7 +10,7 @@ class CalibratorFringeFitting(Plugin):
                "Parameter required: indisk; optional: for AIPS task FRING & CLCAL."
 
     def run(self, context: Context) -> bool:
-        context.logger.info("Start calibrator fringe fitting")
+        context.logger.info("Start PR calibrator fringe fitting")
 
         if not context.get_context().get("targets", []):
             context.logger.error("No targets found in the context")
@@ -35,7 +35,7 @@ class CalibratorFringeFitting(Plugin):
                                                                                "indisk": self.params["indisk"],
                                                                                "in_cat_ident": f"{target['NAME']} WITH CALIBRATORS",
                                                                                "calsour": [calibrator["NAME"]],
-                                                                               "sources": [calibrator["NAME"]],
+                                                                            #    "sources": [calibrator["NAME"]],  # apply to all sources should work for any scenario
                                                                                "opcode": self.params["opcode"],
                                                                                "interpol": self.params["interpol"],
                                                                                "smotyp": self.params["smotyp"],
