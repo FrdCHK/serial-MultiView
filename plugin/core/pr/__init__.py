@@ -1,1 +1,1 @@
-from . import PRCalibratorFringeFitting, PRCalibratorFitsExport, PRCalibratorMapping
+from . import PRCalibratorFringeFitting, PRCalibratorFitsExport, PRCalibratorMapping, PRCalibratorStructureCorrection

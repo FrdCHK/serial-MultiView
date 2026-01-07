@@ -162,5 +162,8 @@ plugins:
 {# Difmap must be installed and can be called through command 'difmap'. Set an alias in your .bashrc (or those for other shells) file if needed. #}
   - name: PRCalibratorMapping
     params: {}
+  - name: PRCalibratorStructureCorrection
+    params: 
+      indisk: {{ indisk }}
   - name: Exit
     params: {}
