@@ -25,5 +25,10 @@ def run_task(task: AIPSTask, params: Dict[str, Any], context: Context) -> bool:
             else:
                 # It's an attribute, set its value
                 setattr(task, param_key, param_value)
-    task.go()
-    return True
+    try:
+        task.go()
+    except Exception as e:
+        context.logger.error(f"Error in AIPS task run: {e}")
+        return False
+    else:
+        return True

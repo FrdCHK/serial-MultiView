@@ -25,6 +25,11 @@ class Fitld(Plugin):
         if "out_cat_ident" in self.params:
             out_cat_ident = self.params["out_cat_ident"]
             context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, self.params, "out_cat_ident", "outseq")
+        if "history" in self.params:
+            history = self.params["history"]
+            self.params.pop("history")
+        else:
+            history = "Created by FITLD"
 
         if not run_task(self.task, self.params, context):
             return False
@@ -33,6 +38,6 @@ class Fitld(Plugin):
                                                                            self.params["outclass"],
                                                                            self.params["outdisk"] if "outdisk" in self.params else 1,
                                                                            out_cat_ident,
-                                                                           history=self.params["history"] if "history" in self.params else "Created by FITLD")
+                                                                           history=history)
         context.logger.info("AIPS task FITLD finished")
         return True

@@ -29,22 +29,23 @@ class PRCalibratorFitsExport(Plugin):
             calibrator_dir = os.path.join(target_dir, "calibrators")
             os.makedirs(calibrator_dir, exist_ok=True)
             for calibrator in target["CALIBRATORS"]:
-                params_split = {"inname": target["NAME"],
-                          "inclass": "SPLAT",
-                          "indisk": self.params["indisk"],
-                          "inseq": params_target["inseq"],
-                          "cl_source": f"CLCAL(FRING({calibrator['NAME']}))"}
-                context.get_context()["loaded_plugins"]["AipsCatalog"].source2ver(context, params_split, "CL", "gainuse")
+                params_export = {"inname": target["NAME"],
+                                "inclass": "SPLAT",
+                                "indisk": self.params["indisk"],
+                                "inseq": params_target["inseq"],
+                                "cl_source": f"CLCAL(FRING({calibrator['NAME']}))"}
+                context.get_context()["loaded_plugins"]["AipsCatalog"].source2ver(context, params_export, "CL", "gainuse")
                 if not context.get_context()["loaded_plugins"]["FitsExport"].export(context,
                                                                                     target["NAME"],
                                                                                     "SPLAT",
                                                                                     self.params["indisk"],
                                                                                     params_target["inseq"],
-                                                                                    params_split["gainuse"],
+                                                                                    params_export["gainuse"],
                                                                                     calibrator["NAME"],
                                                                                     calibrator_dir,
-                                                                                    self.params["aparm"] if "aparm" in self.params else [0]):
-                    context.logger.info(f"Error in calibrator FITS export")
+                                                                                    self.params["aparm"] if "aparm" in self.params else [0],
+                                                                                    " SELFCAL MAPPING"):
+                    context.logger.error(f"Error in calibrator FITS export")
                     return False
 
         context.logger.info(f"Calibrator FITS export finished")

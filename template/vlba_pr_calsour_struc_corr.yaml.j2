@@ -165,5 +165,24 @@ plugins:
   - name: PRCalibratorStructureCorrection
     params: 
       indisk: {{ indisk }}
+  - name: PRTargetMapping
+    params: 
+      indisk: {{ indisk }}
+      structure: True
+{# SPLIT parameters #}
+      aparm: [2, 0]
+{# IMAGR parameters #}
+      imagr: True
+{# set uvwtfn to NA to force IMAGR to use the natual weighting, otherwise it may only be used for low SNR scenarios. Other possible values can be found in AIPS help file. #}
+{# note: pyyaml does not support scientific notation. #}
+      cellsize: [0.0005, 0.0005]
+      imsize: [128, 128]
+      niter: 500
+      gain: 0.1
+      ltype: -4
+      uvwtfn: ''
+      jmfit: True
+{# niter for JMFIT #}
+      niter: 30
   - name: Exit
     params: {}
