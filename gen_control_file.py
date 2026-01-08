@@ -18,7 +18,7 @@ if __name__ == "__main__":
     if args.control is None:
         args.control = path_input("Please specify output control file path", "file")
 
-    env = Environment(loader=FileSystemLoader('./template'), trim_blocks=True)
+    env = Environment(loader=FileSystemLoader('.'), trim_blocks=True)
 
     template = env.get_template(args.template)
 
@@ -28,4 +28,4 @@ if __name__ == "__main__":
     control = template.render(**config, config=config)
     with open(args.control, 'w') as file:
         file.write(control)
-    print(f"Control file written to {args.control}")
+    print(f"Success: control file written to {args.control}")
