@@ -14,9 +14,9 @@ from util.float_input import float_input
 class PRTargetMapping(Plugin):
     @classmethod
     def get_description(cls) -> str:
-        return "Fringe fitting for all calibrators. Plugin  must be run before." \
-               "Plugins required: . " \
-               "Parameter required: ; optional: ."
+        return "Fringe fitting for all calibrators. Plugin PRCalibratorFringeFitting must be run before. If structure correction is used, PRCalibratorMapping & PRCalibratorStructureCorrection also must be run before." \
+               "Plugins required: AipsCatalog, FitsExport, Imagr, GeneralTask, PRCalibratorFringeFitting. " \
+               "Parameter required: indisk, structure, imagr, cellsize, imsize, niter, gain, ltype, uvwtfn, jmfit, niter; optional: aparm for AIPS task SPLIT."
 
     def run(self, context: Context) -> bool:
         context.logger.info("Start PR target mapping")
@@ -34,11 +34,11 @@ class PRTargetMapping(Plugin):
             for calibrator in target["CALIBRATORS"]:
                 if self.params["structure"]:
                     cl_source = f"CALIB({calibrator['NAME']})"
-                    ident_struc_suffix = f" WITH {calibrator['NAME']} STRUC CORR"
+                    ident_struc_suffix = f" {calibrator['NAME']} ST"
                 else:
                     cl_source = f"CLCAL(FRING({calibrator['NAME']}))"
-                    ident_struc_suffix = f" WITH {calibrator['NAME']}"
-                out_cat_ident_suffix = f" PR MAPPING{ident_struc_suffix}"
+                    ident_struc_suffix = f" {calibrator['NAME']}"
+                out_cat_ident_suffix = f" PR{ident_struc_suffix}"
                 params_split = {"inname": target["NAME"],
                                 "inclass": "SPLAT",
                                 "indisk": self.params["indisk"],
@@ -84,7 +84,7 @@ class PRTargetMapping(Plugin):
                     task_imagr.run(context)
 
                     if self.params["jmfit"]:
-                        jmfit_file = os.path.join(target_dir, f"{target['NAME']}{out_cat_ident_suffix}.jmfit")
+                        jmfit_file = os.path.join(target_dir, f"{target['NAME']}{out_cat_ident_suffix}.jm")
                         if not self.jmfit(context, target, split_cat_ident, jmfit_file):
                             return False
                         jmfit_sum = self.jmfit_summary(context, jmfit_file)
@@ -110,7 +110,7 @@ class PRTargetMapping(Plugin):
                                                                                                "dotv": 1,
                                                                                                "out_cat_ident": na_cat_ident})
                                 task_imagr.run(context)
-                                jmfit_na_file = os.path.join(target_dir, f"{target['NAME']}{out_cat_ident_suffix} NA.jmfit")
+                                jmfit_na_file = os.path.join(target_dir, f"{target['NAME']}{out_cat_ident_suffix} NA.jm")
                                 if not self.jmfit(context, target, na_cat_ident, jmfit_na_file):
                                     return False
                                 jmfit_na_sum = self.jmfit_summary(context, jmfit_na_file)
@@ -148,7 +148,7 @@ class PRTargetMapping(Plugin):
             # export JMFIT summary for this target
             if self.params["jmfit"]:
                 jmfit_sum_df = pd.DataFrame(jmfit_list)
-                sum_csv = os.path.join(target_dir, f"{target['NAME']}_JMFIT_SUMMARY.csv")
+                sum_csv = os.path.join(target_dir, f"{target['NAME']}{' ST' if self.params['structure'] else ''} JMFIT SUMMARY.csv")
                 jmfit_sum_df.to_csv(sum_csv, index=False)
                 context.logger.info(f"JMFIT summary of target {target['NAME']} saved to {sum_csv}")
             context.logger.info(f"Target {target['NAME']} mapping finished")

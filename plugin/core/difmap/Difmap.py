@@ -1,5 +1,6 @@
 from typing import Dict, Tuple
 import os
+import tempfile
 from jinja2 import Environment, FileSystemLoader
 import subprocess
 import re
@@ -22,7 +23,7 @@ class Difmap(Plugin):
         return True
 
     @classmethod
-    def map(cls, context: Context, dir: str, source_name: str) -> bool:
+    def map(cls, context: Context, dir: str, source_name: str, prefix: str="", suffix: str="_FITTP.fits") -> bool:
         context.logger.info(f"Start source {source_name} mapping with Difmap")
 
         env = Environment(loader=FileSystemLoader(os.path.dirname(os.path.abspath(__file__))), trim_blocks=True, keep_trailing_newline=True)
@@ -30,15 +31,13 @@ class Difmap(Plugin):
         deep_template = env.get_template("deep_clean.par.j2")
         try:
             # pgplot cannot accept long path, so create a temp link to the targets directory
-            pg_link = "pg_link"
-            if not os.path.exists(pg_link):
-                os.symlink(dir, pg_link)
-            elif os.path.exists(pg_link) and (not os.path.islink(pg_link)):
-                context.logger.error(f"Failed to create symlink for PGPLOT: {pg_link} already exists and is not a symlink")
-                return False
+            with tempfile.NamedTemporaryFile(dir="/tmp", prefix="", suffix="", delete=False) as f:
+                pg_link = f.name
+            os.remove(pg_link)
+            os.symlink(dir, pg_link)
             
             # shallow clean
-            config = {"uv_file": os.path.join(pg_link, f"{source_name}_FITTP.fits"),
+            config = {"uv_file": os.path.join(pg_link, f"{prefix}{source_name}{suffix}"),
                       "IF_end": context.get_context()["no_if"],
                       "save_file_prefix": os.path.join(pg_link, f"{source_name}_shallow"),
                       "field_cell": 2/context.get_context()["obs_freq"]}  # the cell size is based on typical VLBA value
@@ -56,7 +55,7 @@ class Difmap(Plugin):
                     os.remove(os.path.join(pg_link, filename))
             
             # deep clean
-            config = {"uv_file": os.path.join(pg_link, f"{source_name}_FITTP.fits"),
+            config = {"uv_file": os.path.join(pg_link, f"{prefix}{source_name}{suffix}"),
                       "IF_end": context.get_context()["no_if"],
                       "save_file_prefix": os.path.join(pg_link, f"{source_name}_selfcal"),
                       "field_size": field_size*2,  # Difmap halves the actual field size due to a clean algorithm issue
@@ -94,7 +93,7 @@ class Difmap(Plugin):
         return {"rms": rms, "bmin": bmin}
 
     @staticmethod
-    def auto_fov_shrink(context: Context, fits_path: str, rms: float, threshold_sigma: float=6.0, min_fov_pixels: int=256, min_area: int=6) -> Tuple[int, int]:
+    def auto_fov_shrink(context: Context, fits_path: str, rms: float, threshold_sigma: float=7.0, min_fov_pixels: int=256, min_area: int=7) -> Tuple[int, int]:
         """
         Analyzes whether the FOV can be iteratively halved using rectangular boxes.
         

@@ -22,11 +22,9 @@ class Imagr(Plugin):
     def run(self, context: Context) -> bool:
         context.logger.info("Start AIPS task IMAGR")
 
-        if "in_cat_ident" in self.params:
-            context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, self.params)
-        if "out_cat_ident" in self.params:
-            out_cat_ident = self.params["out_cat_ident"]
-            context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, self.params, "out_cat_ident", "outseq")
+        context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, self.params)
+        out_cat_ident = self.params["out_cat_ident"]
+        self.params.pop("out_cat_ident")
 
         tv = AIPSTV.AIPSTV()
         if not tv.exists():

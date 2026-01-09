@@ -9,7 +9,6 @@ from .run_task import run_task
 
 class Fitld(Plugin):
     def __init__(self, params: Dict[str, Any]):
-        """outname and outclass must be specified"""
         self.params = params
         self.task = AIPSTask("FITLD")
 
@@ -24,7 +23,7 @@ class Fitld(Plugin):
 
         if "out_cat_ident" in self.params:
             out_cat_ident = self.params["out_cat_ident"]
-            context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, self.params, "out_cat_ident", "outseq")
+            self.params.pop("out_cat_ident")
         if "history" in self.params:
             history = self.params["history"]
             self.params.pop("history")
@@ -33,6 +32,7 @@ class Fitld(Plugin):
 
         if not run_task(self.task, self.params, context):
             return False
+
         context.get_context()["loaded_plugins"]["AipsCatalog"].add_catalog(context,
                                                                            self.params["outname"],
                                                                            self.params["outclass"],

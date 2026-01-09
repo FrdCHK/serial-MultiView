@@ -174,15 +174,29 @@ plugins:
 {# IMAGR parameters #}
       imagr: True
 {# set uvwtfn to NA to force IMAGR to use the natual weighting, otherwise it may only be used for low SNR scenarios. Other possible values can be found in AIPS help file. #}
-{# note: pyyaml does not support scientific notation. #}
+{# note: yaml in many cases does not support scientific notation. Use 0.0005 instead of 5e-4. #}
       cellsize: [0.0005, 0.0005]
       imsize: [128, 128]
-      niter: 500
+      niter: 999
       gain: 0.1
       ltype: -4
       uvwtfn: ''
       jmfit: True
 {# niter for JMFIT #}
+      niter: 30
+  - name: PRTargetMapping
+    params: 
+      indisk: {{ indisk }}
+      structure: False
+      aparm: [2, 0]
+      imagr: True
+      cellsize: [0.0005, 0.0005]
+      imsize: [128, 128]
+      niter: 999
+      gain: 0.1
+      ltype: -4
+      uvwtfn: ''
+      jmfit: True
       niter: 30
   - name: Exit
     params: {}
