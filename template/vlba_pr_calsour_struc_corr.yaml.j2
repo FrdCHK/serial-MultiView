@@ -163,10 +163,10 @@ plugins:
   - name: PRCalibratorMapping
     params: {}
   - name: PRCalibratorStructureCorrection
-    params: 
+    params:
       indisk: {{ indisk }}
   - name: PRTargetMapping
-    params: 
+    params:
       indisk: {{ indisk }}
       structure: True
 {# SPLIT parameters #}
@@ -184,8 +184,9 @@ plugins:
       jmfit: True
 {# niter for JMFIT #}
       niter: 30
+{# Do target mapping again without structure correction for comparison. This is not necessary. #}
   - name: PRTargetMapping
-    params: 
+    params:
       indisk: {{ indisk }}
       structure: False
       aparm: [2, 0]

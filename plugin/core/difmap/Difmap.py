@@ -70,8 +70,7 @@ class Difmap(Plugin):
             context.logger.error(f"Error in source {source_name} mapping: {e}")
             return False
         finally:
-            if os.path.islink(pg_link):
-                os.remove(pg_link)
+            os.remove(pg_link)
             for filename in os.listdir(os.getcwd()):
                 if filename.startswith("difmap.log"):
                     os.remove(os.path.join(os.getcwd(), filename))
