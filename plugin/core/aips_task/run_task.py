@@ -18,9 +18,9 @@ def run_task(task: AIPSTask, params: Dict[str, Any], context: Context) -> bool:
         if isinstance(param_value, list):
             param_value.insert(0, None)
         if param_key in ["datain", "dataout", "infile", "fitout"] and isinstance(param_value, str) and len(param_value) > 47:
-            context.logger.debug(f"Path too long for AIPS, creating temp symlink")
             actual_path = param_value
             parent_link, temp_path = create_short_link(param_value)
+            context.logger.debug(f"Path too long for AIPS, creating temp symlink {parent_link}")
             temp_links.append(parent_link)
             if param_key in ["dataout", "fitout"]:
                 _, ext = os.path.splitext(actual_path)
@@ -52,5 +52,5 @@ def run_task(task: AIPSTask, params: Dict[str, Any], context: Context) -> bool:
             context.logger.debug(f"Renaming {pairs['temp_name']} to {pairs['final_name']}")
             os.rename(pairs['temp_name'], pairs['final_name'])
         for temp_link in temp_links:
-            context.logger.debug(f"Removing temp link: {temp_link}")
+            context.logger.debug(f"Removing temp symlink: {temp_link}")
             os.remove(temp_link)
