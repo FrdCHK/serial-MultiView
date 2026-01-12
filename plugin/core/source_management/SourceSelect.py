@@ -1,21 +1,17 @@
-import pandas as pd
-import yaml
 from typing import Any
+import yaml
 
 from core.Plugin import Plugin
 from core.Context import Context
-from util.integer_input import integer_input, is_integer
 
 
 class SourceSelect(Plugin):
     @classmethod
     def get_description(cls) -> str:
-        return "Select target and calibrator sources. " \
-        "Plugins required: AipsCatlog, GetObsInfo, GeneralTask."
+        return "Abstract class for source selection. Do not try to instantiate this class." \
+        "Plugins required: AipsCatalog, GeneralTask."
     
-    def run(self, context: Context) -> bool:
-        context.logger.info(f"Start selecting sources")
-
+    def predef_load(self, context: Context) -> int:
         if "in_cat_ident" in self.params:
             context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, self.params)
         
@@ -35,87 +31,33 @@ class SourceSelect(Plugin):
                     context.edit_context({"targets": predef_targets})
                     context.logger.info(f"Predef source list file {self.params['load']} loaded successfully")
                     if not self.splat(context):
-                        return False
-                    return True
+                        return -1
+                    return 0
                 else:
                     context.logger.warning(f"Predef source list file {self.params['load']} does not contain targets")
                     context.logger.info(f"Continue with manual selection")
+                    return 1
             # if encounter error, just catch and log it and continue with manual selection
-        
-        sources = pd.DataFrame(context.get_context()["sources"])
-        while True:
-            target_num = integer_input("Please input the number of targets", 1)
-            if target_num > 0:
-                break
-            print("\033[31mTarget number should be > 0!\033[0m")
-        selected_sources = []  # to avoid duplicates
-        targets = pd.DataFrame(columns=["ID", "NAME", "RA", "DEC"])
-        context.edit_context({"targets": []})
-        for i in range(target_num):
-            print("\033[34mSource list:")
-            print(sources[["ID", "NAME"]].to_string(index=False)+"\033[0m")
-            while True:
-                while True:
-                    target_id = integer_input(f"Target {i+1} ID")
-                    if target_id in range(1, sources.index.size+1):
-                        break
-                    else:
-                        print("\033[31mInvalid input!\033[0m")
-                if target_id in selected_sources:
-                    print("\033[31mSource already selected!\033[0m")
-                else:
-                    selected_sources.append(target_id)
-                    targets.loc[targets.index.size] = (sources.loc[sources["ID"] == target_id]).iloc[0]
-                    break
-            target_item = {"ID": int(targets.loc[i, "ID"]), "NAME": str(targets.loc[i, "NAME"]),
-                             "RA": float(targets.loc[i, "RA"]), "DEC": float(targets.loc[i, "DEC"])}
+        else:
+            return 1
 
-            # select calibrators for each target
-            calibrators = pd.DataFrame(columns=["ID", "NAME", "RA", "DEC"])
-            while True:
-                redo_flag = False
-                user_input = input(f"Target {i+1} calibrator IDs (space separated): ")
-                parts = user_input.split()
-                parts = list(dict.fromkeys(parts))  # remove duplicates
-                for part in parts:
-                    if is_integer(part):
-                        int_part = int(part)
-                        if not (int_part in range(1, sources.index.size+1)):
-                            print("\033[31mInvalid input!\033[0m")
-                            redo_flag = True
-                            break
-                    else:
-                        print("\033[31mInvalid input!\033[0m")
-                        redo_flag = True
-                        break
-                if redo_flag:
-                    continue
-                for part in parts:
-                    int_part = int(part)
-                    calibrators.loc[calibrators.index.size] = (sources.loc[sources["ID"] == int_part]).iloc[0]
-                break
-            target_item["CALIBRATORS"] = calibrators.to_dict(orient='records')
-            context.get_context()["targets"].append(target_item)
-
-        context.logger.info(f"Sources selected")
-
-        if not self.splat(context):
-            return False
-        context.logger.info(f"Target & calibrators SPLAT finished")
-
-        return True
-    
-    def splat(self, context: Context) -> bool:
+    def splat(self, context: Context, identifier_suffix: str=" WITH CALIBRATORS") -> bool:
         if not context.get_context()["loaded_plugins"]["AipsCatalog"].source2ver(context, self.params, "CL", "gainuse"):
             context.logger.error(f"CL source not found in context")
             return False
         for target in context.get_context()["targets"]:
+            if "CALIBRATORS" in target:
+                sources = [target["NAME"], *[calibrator["NAME"] for calibrator in target["CALIBRATORS"]]]
+            else:
+                sources = [target["NAME"]]
+                if identifier_suffix == " WITH CALIBRATORS":
+                    identifier_suffix = ""
             task = context.get_context()["loaded_plugins"]["GeneralTask"]({"task_name": "SPLAT",
                                                                            "inname": self.params["inname"],
                                                                            "inclass": self.params["inclass"],
                                                                            "indisk": self.params["indisk"],
                                                                            "inseq": self.params["inseq"],
-                                                                           "sources": [target["NAME"], *[calibrator["NAME"] for calibrator in target["CALIBRATORS"]]],
+                                                                           "sources": sources,
                                                                            "docalib": 1,
                                                                            "gainuse": self.params["gainuse"],
                                                                            "outname": target["NAME"],
@@ -125,7 +67,7 @@ class SourceSelect(Plugin):
                                                                                       target["NAME"],
                                                                                       "SPLAT",
                                                                                       self.params["indisk"],
-                                                                                      f"{target['NAME']} WITH CALIBRATORS",
+                                                                                      f"{target['NAME']}{identifier_suffix}",
                                                                                       history="Created by SPLAT"):
                 return False
         return True

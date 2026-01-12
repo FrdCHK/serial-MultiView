@@ -7,7 +7,7 @@ from core.Context import Context
 class PRCalibratorFitsExport(Plugin):
     @classmethod
     def get_description(cls) -> str:
-        return "Split and export FITS file for calibrators. Plugins SourceSelect and PRCalibratorFringeFitting must be run before. " \
+        return "Split and export FITS file for calibrators. Plugins PRCalibratorFringeFitting must be run before. " \
                "Plugins required: AipsCatalog, GeneralTask, SourceSelect, PRCalibratorFringeFitting. " \
                "Parameter required: indisk; optional: aparm for AIPS task SPLIT."
     
@@ -45,7 +45,7 @@ class PRCalibratorFitsExport(Plugin):
                                                                                     calibrator_dir,
                                                                                     self.params["aparm"] if "aparm" in self.params else [0],
                                                                                     " SELFCAL MAPPING"):
-                    context.logger.error(f"Error in calibrator FITS export")
+                    context.logger.error(f"Error in calibrator {calibrator['NAME']} FITS export")
                     return False
 
         context.logger.info(f"Calibrator FITS export finished")

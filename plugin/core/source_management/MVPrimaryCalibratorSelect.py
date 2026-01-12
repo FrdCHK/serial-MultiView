@@ -7,7 +7,7 @@ from core.Context import Context
 from util.integer_input import integer_input, is_integer
 
 
-class SourceSelect(Plugin):
+class MVPrimaryCalibratorSelect(Plugin):
     @classmethod
     def get_description(cls) -> str:
         return "Select primary calibrator."

@@ -1,1 +1,1 @@
-from . import SourceSelect, PrimaryCalibratorSelect
+from . import SourceSelect, MVPrimaryCalibratorSelect, PRSourceSelect, SelfcalSourceSelect

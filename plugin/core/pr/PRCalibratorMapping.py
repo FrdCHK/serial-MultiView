@@ -7,7 +7,7 @@ from core.Context import Context
 class PRCalibratorMapping(Plugin):
     @classmethod
     def get_description(cls) -> str:
-        return "Call difmap to clean and self calibrate the calibrator maps. " \
+        return "Call difmap to clean and self calibrate the calibrator maps. Plugins PRFitsExport must be run before. " \
         "Plugins required: PRCalibratorFitsExport, Difmap."
     
     def run(self, context: Context) -> bool:

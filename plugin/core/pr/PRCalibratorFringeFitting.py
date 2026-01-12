@@ -5,9 +5,9 @@ from core.Context import Context
 class PRCalibratorFringeFitting(Plugin):
     @classmethod
     def get_description(cls) -> str:
-        return "Fringe fitting for all calibrators. Plugin SourceSelect must be run before." \
-               "Plugins required: AipsCatalog, Fring, Clcal, SourceSelect. " \
-               "Parameter required: indisk; optional: for AIPS task FRING & CLCAL."
+        return "Fringe fitting for all calibrators. Plugin PRSourceSelect must be run before." \
+               "Plugins required: AipsCatalog, Fring, Clcal, PRSourceSelect. " \
+               "Parameter required: indisk, aparm, dparm, solint, opcode, interpol, smotyp, bparm."
 
     def run(self, context: Context) -> bool:
         context.logger.info("Start PR calibrator fringe fitting")
