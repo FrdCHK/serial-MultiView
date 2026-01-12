@@ -154,5 +154,24 @@ plugins:
       interpol: AMBG
       smotyp: VLBI
       bparm: [0, 0, 1, 0]
+  - name: PRCalibratorFitsExport
+    params:
+      indisk: {{ indisk }}
+{# SPLIT parameters #}
+      aparm: [2, 0]
+  - name: PRTargetMapping
+    params:
+      indisk: {{ indisk }}
+      structure: False
+      aparm: [2, 0]
+      imagr: True
+      cellsize: [0.0005, 0.0005]
+      imsize: [128, 128]
+      niter: 999
+      gain: 0.1
+      ltype: -4
+      uvwtfn: ''
+      jmfit: True
+      niter: 30
   - name: Exit
     params: {}
