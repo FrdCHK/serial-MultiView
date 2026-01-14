@@ -32,10 +32,14 @@ class RefAntSelect(Plugin):
             if ty_exist:
                 ty_table = data.table("AIPS TY", 0)
                 for item in default_vlba_ref_ant:
+                    item_not_observe = True
                     for ant in context.get_context()["antennas"]:
                         if item == ant["NAME"]:
                             ant_id = ant["ID"]
+                            item_not_observe = False
                             break
+                    if item_not_observe:
+                        continue
                     high_tsys_flag = False
                     for ty_row in ty_table:
                         if ty_row['antenna_no'] == ant_id and (any(tsys > 40. for tsys in ty_row['tsys_1']) or 
