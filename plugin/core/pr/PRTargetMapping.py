@@ -55,7 +55,7 @@ class PRTargetMapping(Plugin):
                                                                                     target_dir,
                                                                                     self.params["aparm"] if "aparm" in self.params else [2, 0],
                                                                                     out_cat_ident_suffix,
-                                                                                    "_UV"):
+                                                                                    f"{out_cat_ident_suffix} UV"):
                     context.logger.error(f"Error in target FITS export")
                     return False
                 
