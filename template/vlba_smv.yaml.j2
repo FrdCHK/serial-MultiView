@@ -1,0 +1,150 @@
+{# For standard VLBA single-calibrator PR #}
+config:
+{% for key in config.keys() %}
+  {{ key }}: {{ config[key] }}
+{% endfor %}
+plugins:
+  - name: AipsCatalog
+    params: {}
+  - name: AipsInit
+    params:
+      userno: {{ userno }}
+  - name: Fitld
+    params:
+      datain: {{ idifits }}
+      outname: {{ exp_name }}
+      outclass: UVDATA
+      out_cat_ident: ORIGIN
+  - name: GetObsInfo
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      listr_outprint: {{ workspace }}/scan.txt
+      prtan_outprint: {{ workspace }}/antenna.txt
+  - name: Accor
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      identifier: ACCOR
+  - name: Clcal
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      sn_source: ACCOR
+      cl_source: FITLD
+      identifier: CLCAL(ACCOR)
+  - name: Apcal
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      identifier: APCAL
+  - name: Clcal
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      sn_source: APCAL
+      cl_source: CLCAL(ACCOR)
+      identifier: CLCAL(APCAL)
+  - name: Clcor
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      opcode: PANG
+      clcorprm: [1, 0]
+      cl_source: CLCAL(APCAL)
+      identifier: CLCOR(PANG)
+  - name: Eop
+    params:
+      eop_path: {{ eop_path }}
+  - name: Clcor
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      opcode: EOPS
+      infile: {{ eop_path }}
+      cl_source: CLCOR(PANG)
+      identifier: CLCOR(EOPS)
+  - name: Ionex
+    params:
+      ionex_dir: {{ ionex_dir }}
+  - name: Tecor
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      aparm: [1, 0]
+      cl_source: CLCOR(EOPS)
+      identifier: TECOR
+  - name: RefAntSelect
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+{# Only works for VLBA, and TY&WX tables will be read to assess data quality. If False, ref_ant must be specified. #}
+      auto_ref_ant: {{ auto_ref_ant }}
+{# 2-charactor code used. Ignored if auto_ref_ant is True. #}
+      ref_ant: {{ ref_ant }}
+{# manual phase calibration #}
+  - name: Fring
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+{# $mpc_calsour$ is automatically set in plugin GetObsInfo #}
+      calsour: [$mpc_calsour:name$]
+      timerang: [0, 0, 0, 0, $mpc_calsour:end_time:day$, $mpc_calsour:end_time:hour$, $mpc_calsour:end_time:minute$, $mpc_calsour:end_time:second$]
+{# $ref_ant$ is set in plugin RefAntSelect #}
+      refant: $ref_ant:ID$
+      aparm: [2, 0, 0, 0, 0, 0, 7]
+      dparm: [0, 0, 0, 0, 0, 0, 0, 1, 0]
+      solint: -1
+      docalib: 1
+      cl_source: TECOR
+      identifier: FRING(MPC)
+  - name: Clcal
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      calsour: [$mpc_calsour:name$]
+      opcode: CALP
+      interpol: AMBG
+      smotyp: VLBI
+      bparm: [0, 0, 1, 0]
+      sn_source: FRING(MPC)
+      cl_source: TECOR
+      identifier: CLCAL(MPC)
+  - name: PRSourceSelect
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      cl_source: CLCAL(MPC)
+{% if predef_source_list is defined %}
+      load: {{ predef_source_list }}
+{% endif %}
+  - name: MVPrimaryCalibratorSelect
+    params:
+      indisk: {{ indisk }}
+      possm: True
+  - name: Exit
+    params: {}
