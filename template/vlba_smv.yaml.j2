@@ -1,7 +1,11 @@
-{# For standard VLBA single-calibrator PR #}
+{# For VLBA serial MultiView (sMV) #}
 config:
 {% for key in config.keys() %}
+{% if config[key] == '' %}
+  {{ key }}: ''
+{% else %}
   {{ key }}: {{ config[key] }}
+{% endif %}
 {% endfor %}
 plugins:
   - name: AipsCatalog
@@ -146,5 +150,50 @@ plugins:
     params:
       indisk: {{ indisk }}
       possm: True
+  - name: MVPrimaryFringeFitting
+    params:
+      indisk: {{ indisk }}
+{# FRING parameters #}
+      aparm: [2, 0, 1, 0, 0, 0, 5]
+      dparm: [0]
+      solint: -1
+{# CLCAL parameters #}
+      opcode: CALP
+      interpol: AMBG
+      smotyp: VLBI
+      bparm: [0, 0, 1, 0]
+  - name: MVSecondaryFringeFitting
+    params:
+      indisk: {{ indisk }}
+{# FRING parameters #}
+      aparm: [2, 0, 1, 0, 0, 0, 5]
+      dparm: [0]
+      solint: -1
+{# CLCAL parameters #}
+      opcode: CALP
+      interpol: AMBG
+      smotyp: VLBI
+      bparm: [0, 0, 1, 0]
+  - name: MVSnExport
+    params:
+      indisk: {{ indisk }}
+  - name: MVRun
+    params:
+      max_depth: {{ max_depth }}
+      max_ang_v: {{ max_ang_v }}
+      min_z: {{ min_z }}
+      weight: {{ weight }}
+      kalman_factor: {{ kalman_factor }}
+      smo_half_window: {{ smo_half_window }}
+  - name: MVPostProcess
+    params:
+      indisk: {{ indisk }}
+      cellsize: {{ cellsize }}
+      imsize: {{ imsize }}
+      niter: {{ niter }}
+      gain: {{ gain }}
+      ltype: {{ ltype }}
+      uvwtfn: '{{ uvwtfn }}'
+      jmfit: {{ jmfit }}
   - name: Exit
     params: {}

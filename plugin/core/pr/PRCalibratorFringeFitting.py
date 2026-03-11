@@ -27,7 +27,8 @@ class PRCalibratorFringeFitting(Plugin):
                                                                                "aparm": self.params["aparm"],
                                                                                "dparm": self.params["dparm"],
                                                                                "solint": self.params["solint"],
-                                                                               "docalib": -1,
+                                                                               "docalib": self.params["docalib"] if "docalib" in self.params else -1,
+                                                                               "cl_source": self.params.get("cl_source", "SPLAT"),
                                                                                "identifier": f"FRING({calibrator['NAME']})"})
                 task_fring.run(context)
                 task_clcal = context.get_context()["loaded_plugins"]["Clcal"]({"inname": target["NAME"],
@@ -41,7 +42,7 @@ class PRCalibratorFringeFitting(Plugin):
                                                                                "smotyp": self.params["smotyp"],
                                                                                "bparm": self.params["bparm"],
                                                                                "sn_source": f"FRING({calibrator['NAME']})",
-                                                                               "cl_source": "SPLAT",
+                                                                               "cl_source": self.params.get("cl_source", "SPLAT"),
                                                                                "identifier": f"CLCAL(FRING({calibrator['NAME']}))"})
                 task_clcal.run(context)
                 context.logger.info(f"Calibrator {calibrator['NAME']} fringe fitting done")

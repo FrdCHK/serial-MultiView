@@ -13,6 +13,9 @@ dependencies:
   - pyyaml
   - pandas
   - astropy
+  - numpy
+  - scipy
+  - matplotlib
   - parseltongue
 
 # AIPS needs to be installed separately
