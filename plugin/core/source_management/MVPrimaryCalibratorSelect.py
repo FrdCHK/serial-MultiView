@@ -26,6 +26,9 @@ class MVPrimaryCalibratorSelect(SourceSelect):
         context.logger.info(f"Start selecting MultiView primary calibrator")
 
         for target in context.get_context().get("targets"):
+            if ("primary_calibrator" in target) or ("PRIMARY_CALIBRATOR" in target):
+                context.logger.info(f"Primary calibrator already set for target {target['NAME']}, skip selection")
+                continue
             calibrators = pd.DataFrame(target["CALIBRATORS"])
             if self.params.get("possm", False):
                 target_params = {"inname": target["NAME"],
