@@ -3,6 +3,11 @@ workspace: your/workspace
 idifits: your/data.idifits
 exp_name: your experiment name
 indisk: your disk number
+eop_path: your eop file path
+ionex_dir: your ionex map file directory
+auto_ref_ant: determine reference antenna automatically for VLBA. True or False
+ref_ant: two-charactor antenna code, e.g, PT
+predef_source_list: your pre-defined source list. context file of previous sessions can be used
 max_depth: 5
 max_ang_v: 700.0
 min_z: 0.7
