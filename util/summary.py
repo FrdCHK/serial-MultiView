@@ -1,7 +1,7 @@
 """
 Read JMFIT files and generate a summary CSV file.
 @Author: Jingdong Zhang
-@DATE  : 2024/8/12
+@DATE  : 2026/03/12
 """
 import os
 import re

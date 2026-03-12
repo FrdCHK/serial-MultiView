@@ -1,3 +1,8 @@
+"""
+Primary calibrator fringe fitting for MultiView.
+@Author: Jingdong Zhang
+@DATE  : 2026/03/12
+"""
 from core.Plugin import Plugin
 from core.Context import Context
 

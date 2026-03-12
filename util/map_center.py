@@ -1,3 +1,8 @@
+"""
+Map center determination with IMAGR.
+@Author: Jingdong Zhang
+@DATE  : 2026/03/12
+"""
 from typing import Dict, Any
 from AIPSData import AIPSImage
 

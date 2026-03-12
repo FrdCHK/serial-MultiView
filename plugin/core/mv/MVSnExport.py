@@ -1,3 +1,8 @@
+"""
+Export SN tables for MultiView.
+@Author: Jingdong Zhang
+@DATE  : 2026/03/12
+"""
 import os
 import math
 import yaml
@@ -48,9 +53,6 @@ class MVSnExport(Plugin):
                     return False
 
             splat_uv = AIPSUVData(target["NAME"], "SPLAT", indisk, int(params_target["inseq"]))
-            # if_num = int(context.get_context().get("no_if", splat_uv.header.naxis[3]))
-            # context.edit_context({"if_number": if_num})
-
             calibrators = target.get("CALIBRATORS", [])
             for calibrator in calibrators:
                 if int(calibrator["ID"]) == primary_id:

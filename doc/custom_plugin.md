@@ -1,31 +1,57 @@
-Plugins should be in a form of modules, that is, a directory containing a __init__.py file.
-It should contain at least one class that inherits from core.Plugin.
-The class should have a run method, which takes a context object as argument.
-The run method should return a boolean value, indicating whether the plugin succeeded (True) or failed (False), and the pipeline should continue (True) or stop (False).
-It is recommended to mention which parameters (and/or other plugins) are required by the plugin in the docstring and/or the class description.
-Put the plugin in the plugin/custom directory, and add it to plugin/custom/__init__.py:
+# Custom Plugin Development
+
+## Where to put your plugin
+- Create a module under `plugin/custom/<your_plugin>/`.
+- Add an `__init__.py` file in the module directory.
+- Register it in `plugin/custom/__init__.py`:
 ```
-from . import your_plugin_name
+from . import your_plugin
 ```
-Then it will be loaded automatically.
-To call it in your pipeline, add it to the configuration file. Extra parameters are optional:
+
+## Minimal plugin skeleton
+```
+"""
+Your plugin description.
+@Author: Your Name
+@DATE  : YYYY/MM/DD
+"""
+from core.Plugin import Plugin
+from core.Context import Context
+
+class YourPlugin(Plugin):
+    @classmethod
+    def get_description(cls) -> str:
+        return "Short description and required params."
+
+    def run(self, context: Context) -> bool:
+        context.logger.info("Start YourPlugin")
+        # do work here
+        context.logger.info("YourPlugin finished")
+        return True
+```
+
+## Style conventions
+- Use module docstrings with `@Author` and `@DATE`.
+- Prefer `context.logger.info()` for high‑level progress.
+- Use `context.logger.debug()` for detailed output.
+- Validate required inputs early and return `False` on failure.
+
+## Using the context
+- Read common values from `context.get_context()`, for example:
+  - `context.get_context()["config"]`
+  - `context.get_context()["targets"]`
+- Write results back with `context.edit_context({...})`.
+
+## Adding parameters
+- Parameters are passed from the control file:
 ```
 plugins:
-  - name: Class1
-    params: {}
-  - name: Class2
+  - name: YourPlugin
     params:
       param1: value1
       param2: value2
 ```
-The plugin will be called in the order they are listed in the configuration file.
 
-A shared context is available to all plugins.
-It is initialized with the configuration file and passed to all plugins.
-It can be readed and modified by all plugins.
-
-You should use logger to log messages, for example:
-```
-context.logger.info("This is an info message")
-```
-Debug level messages are only outputed to the log file, while other messages are outputed to both the log file and the console.
+## Debugging
+- Enable debug logs in your logger configuration if needed.
+- Keep log output deterministic and minimal for batch runs.

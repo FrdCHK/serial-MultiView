@@ -1,3 +1,8 @@
+"""
+MultiView post-process: SN import, SPLIT, UVFLG, IMAGR, JMFIT, FITTP.
+@Author: Jingdong Zhang
+@DATE  : 2026/03/12
+"""
 import os
 import math
 import yaml
