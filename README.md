@@ -14,6 +14,7 @@ A modular VLBI pipeline framework with a focus on serial MultiView (sMV) phase p
 - `core/`: framework core (context, plugin base, logger, plugin loader)
 - `plugin/`: all pipeline functionality
   - `plugin/core/`: built-in plugins (AIPS tasks, calibration flow, MV, PR, self-cal)
+  - `plugin/core/mv/`: MultiView core plugins and GUI helpers
   - `plugin/custom/`: your custom plugins
 - `template/`: Jinja2 control file templates (pipelines)
 - `config/`: example configuration

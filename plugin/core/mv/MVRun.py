@@ -2,9 +2,8 @@ import os
 import copy
 import yaml
 import pandas as pd
-import numpy as np
 
-import mv
+import plugin.core.mv as mv
 
 from core.Plugin import Plugin
 from core.Context import Context
