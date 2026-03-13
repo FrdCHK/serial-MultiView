@@ -8,7 +8,11 @@ import pandas as pd
 import copy
 import matplotlib.pyplot as plt
 
-import mv
+from .plane import plane
+from .Node import Node
+from .recursion import recursion
+from .find_min_leaf import find_min_leaf
+from .rodrigues_rotation import rodrigues_rotation
 
 
 class Antenna:
@@ -200,7 +204,7 @@ class Antenna:
 
         mv_target_phase = []
         for i in range(self.mv_result.shape[0]):
-            mv_target_phase.append(mv.plane(*self.mv_result[i], *self.target_pos))
+            mv_target_phase.append(plane(*self.mv_result[i], *self.target_pos))
         mv_target_phase = np.array(mv_target_phase)
         mv_target_phase_wrap = (mv_target_phase + np.pi) % (2 * np.pi) - np.pi
 
@@ -254,7 +258,7 @@ class Antenna:
         self.adjust_info.to_csv(adj_dir, index=False)
         mv_target_phase = []
         for i in range(self.mv_result.shape[0]):
-            mv_target_phase.append(mv.plane(*self.mv_result[i], *self.target_pos))
+            mv_target_phase.append(plane(*self.mv_result[i], *self.target_pos))
         mv_target_phase = np.array(mv_target_phase)
         mv_target_phase_wrap = (mv_target_phase + np.pi) % (2 * np.pi) - np.pi
         mv_table = pd.DataFrame({'t': self.mv_t, 'phase': mv_target_phase_wrap})
@@ -335,7 +339,7 @@ class Antenna:
         result = []
         calsour = self.data['calsour'].unique()
         accu = {sour: 0. for sour in calsour}
-        root_node = mv.Node(
+        root_node = Node(
             {'prune': False, 'position': -1, 'action': 0, 'angle': 0, 'total': 0, 'norm': np.zeros((3, 1))})
         z_lim = min_z
         ang_v = max_ang_v
@@ -350,20 +354,20 @@ class Antenna:
         for i in range(data_extended.index.size):
             calsour_this = data_extended.loc[i, 'calsour']
 
-            root_node.current = mv.recursion(data_extended, i, max_depth, norm_vec, accu, 0, ang_v, root_node, z_lim)
-            root_node.plus = mv.recursion(data_extended, i, max_depth, norm_vec, accu, 1, ang_v, root_node, z_lim)
-            root_node.minus = mv.recursion(data_extended, i, max_depth, norm_vec, accu, -1, ang_v, root_node, z_lim)
+            root_node.current = recursion(data_extended, i, max_depth, norm_vec, accu, 0, ang_v, root_node, z_lim)
+            root_node.plus = recursion(data_extended, i, max_depth, norm_vec, accu, 1, ang_v, root_node, z_lim)
+            root_node.minus = recursion(data_extended, i, max_depth, norm_vec, accu, -1, ang_v, root_node, z_lim)
             norm_series = None
             if i > 5:
                 norm_series = np.zeros((i, 4))
                 norm_series[:, 0] = data_extended.loc[:i-1, 't']
                 norm_series[:, 1:] = np.array(result)
                 norm_series = norm_series[-6:, :]
-            min_node, min_path = mv.find_min_leaf(norm_series, data_extended['t'], i, root_node, norm_vec, weight, (max_depth, max_ang_v, min_z))
+            min_node, min_path = find_min_leaf(norm_series, data_extended['t'], i, root_node, norm_vec, weight, (max_depth, max_ang_v, min_z))
 
             if min_node is None:  # skip outliers (can't find any legal path)
                 result.append(norm_vec.flatten())
-                root_node = mv.Node(
+                root_node = Node(
                     {'prune': False, 'position': i, 'action': 0, 'angle': 0, 'total': 0, 'norm': norm_vec})
                 continue
             selected_next = min_path[1]
@@ -390,7 +394,7 @@ class Antenna:
             new_norm = x_hat
             result.append(new_norm.flatten())
 
-            root_node = mv.Node(selected_next)
+            root_node = Node(selected_next)
             root_node.data['norm'] = new_norm
             norm_vec = new_norm
 
@@ -415,27 +419,27 @@ class Antenna:
         result = []
         calsour = self.data['calsour'].unique()
         accu = {sour: 0. for sour in calsour}
-        root_node = mv.Node(
+        root_node = Node(
             {'prune': False, 'position': -1, 'action': 0, 'angle': 0, 'total': 0, 'norm': np.zeros((3, 1))})
         z_lim = min_z
         ang_v = max_ang_v
         for i in range(data_extended.index.size):
             calsour_this = data_extended.loc[i, 'calsour']
 
-            root_node.current = mv.recursion(data_extended, i, max_depth, norm_vec, accu, 0, ang_v, root_node, z_lim)
-            root_node.plus = mv.recursion(data_extended, i, max_depth, norm_vec, accu, 1, ang_v, root_node, z_lim)
-            root_node.minus = mv.recursion(data_extended, i, max_depth, norm_vec, accu, -1, ang_v, root_node, z_lim)
+            root_node.current = recursion(data_extended, i, max_depth, norm_vec, accu, 0, ang_v, root_node, z_lim)
+            root_node.plus = recursion(data_extended, i, max_depth, norm_vec, accu, 1, ang_v, root_node, z_lim)
+            root_node.minus = recursion(data_extended, i, max_depth, norm_vec, accu, -1, ang_v, root_node, z_lim)
             norm_series = None
             if i > 5:
                 norm_series = np.zeros((i, 4))
                 norm_series[:, 0] = data_extended.loc[:i - 1, 't']
                 norm_series[:, 1:] = np.array(result)
                 norm_series = norm_series[-6:, :]
-            min_node, min_path = mv.find_min_leaf(norm_series, data_extended['t'], i, root_node, norm_vec, weight, (max_depth, max_ang_v, min_z))
+            min_node, min_path = find_min_leaf(norm_series, data_extended['t'], i, root_node, norm_vec, weight, (max_depth, max_ang_v, min_z))
 
             if min_node is None:  # skip outliers (can't find any legal path)
                 result.append(norm_vec.flatten())
-                root_node = mv.Node(
+                root_node = Node(
                     {'prune': False, 'position': i, 'action': 0, 'angle': 0, 'total': 0, 'norm': norm_vec})
                 continue
             selected_next = min_path[1]
@@ -452,11 +456,11 @@ class Antenna:
             new_point = np.array([data_extended.loc[i, 'x'], data_extended.loc[i, 'y'],
                                   data_extended.loc[i, 'phase'] + accu[calsour_this]])
 
-            new_norm, _, _ = mv.rodrigues_rotation(norm_vec, new_point)
+            new_norm, _, _ = rodrigues_rotation(norm_vec, new_point)
             new_norm = new_norm / np.linalg.norm(new_norm)
             result.append(new_norm.flatten())
 
-            root_node = mv.Node(selected_next)
+            root_node = Node(selected_next)
             root_node.data['norm'] = new_norm
             norm_vec = new_norm
 

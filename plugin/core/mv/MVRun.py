@@ -3,7 +3,9 @@ import copy
 import yaml
 import pandas as pd
 
-import plugin.core.mv as mv
+from .Calibrator import Calibrator
+from .Antenna import Antenna
+from .Gui import Gui
 
 from core.Plugin import Plugin
 from core.Context import Context
@@ -85,7 +87,7 @@ class MVRun(Plugin):
                     return False
                 sn_table = pd.read_csv(sn_path)
                 sn_table = sn_table.loc[sn_table["p0"] != 0]
-                calibrator = mv.Calibrator(int(row["ID"]), row["NAME"], row["RA"], row["DEC"], int(row["SN"]), sn_table)
+                calibrator = Calibrator(int(row["ID"]), row["NAME"], row["RA"], row["DEC"], int(row["SN"]), sn_table)
                 calibrator.calc_relative_position(primary_ra, primary_dec)
                 secondary_calibrators.append(calibrator)
                 sn_all = pd.concat([sn_all, sn_table], ignore_index=True)
@@ -111,7 +113,7 @@ class MVRun(Plugin):
                 sn_if0["phase"] = sn_antenna["p0"]
                 sn_if0.sort_values(by="t", inplace=True, ascending=True)
                 sn_if0.reset_index(drop=True, inplace=True)
-                antenna = mv.Antenna(int(row["ID"]), row["NAME"], sn_if0, secondary_calibrators)
+                antenna = Antenna(int(row["ID"]), row["NAME"], sn_if0, secondary_calibrators)
                 antennas.append(antenna)
 
             target_relative_position = relative_position([primary_ra, primary_dec], [target["RA"], target["DEC"]])
@@ -132,7 +134,7 @@ class MVRun(Plugin):
 
             if run_all_flag:
                 for antenna in antennas:
-                    mv.Gui({"ID": target["ID"], "NAME": target["NAME"]},
+                    Gui({"ID": target["ID"], "NAME": target["NAME"]},
                            antenna, mv_config, target_relative_position, secondary_calibrators, antenna.id in conf_ids)
             else:
                 antenna_ids = [a.id for a in antennas]
@@ -143,7 +145,7 @@ class MVRun(Plugin):
                     user_input = integer_input("Select an antenna (ID) to rerun")
                     if user_input in antenna_ids:
                         antenna_index = antenna_ids.index(user_input)
-                        mv.Gui({"ID": target["ID"], "NAME": target["NAME"]},
+                        Gui({"ID": target["ID"], "NAME": target["NAME"]},
                                antennas[antenna_index], mv_config, target_relative_position, secondary_calibrators, antennas[antenna_index].id in conf_ids)
                     elif user_input == 99:
                         break

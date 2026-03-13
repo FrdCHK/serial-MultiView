@@ -5,7 +5,9 @@ class for GUI
 """
 import copy
 
-import mv
+from .RootWindow import RootWindow
+from .ConfigWindow import ConfigWindow
+from .AdjustWindow import AdjustWindow
 
 
 class Gui:
@@ -22,13 +24,13 @@ class Gui:
                                self.config['weight'], self.config['kalman_factor'], self.config['smo_half_window'])
 
         # init windows
-        self.root_window = mv.RootWindow(self.target, antenna, self.config)
+        self.root_window = RootWindow(self.target, antenna, self.config)
         if mv_flag:
             self.root_window.load()  # NOTE: must load before instantiating config and adjust windows
-            self.config_window = mv.ConfigWindow(self.root_window, antenna, self.config, self.default_config)
+            self.config_window = ConfigWindow(self.root_window, antenna, self.config, self.default_config)
         else:
-            self.config_window = mv.ConfigWindow(self.root_window, antenna, self.config)
-        self.adjust_window = mv.AdjustWindow(self.root_window, antenna, self.config,
+            self.config_window = ConfigWindow(self.root_window, antenna, self.config)
+        self.adjust_window = AdjustWindow(self.root_window, antenna, self.config,
                                              target_relative_position, secondary_calibrators)
         self.root_window.config_window = self.config_window
         self.root_window.adjust_window = self.adjust_window

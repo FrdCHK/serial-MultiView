@@ -5,7 +5,8 @@ description
 """
 import numpy as np
 
-import mv
+from .plane import plane
+from .symbol import symbol
 
 
 def rodrigues_rotation(norm_vec, new_point):
@@ -17,8 +18,8 @@ def rodrigues_rotation(norm_vec, new_point):
     :param new_point: the new point that the plane will cross
     :return: the rotated normal vector, rotation axis, rotation angle
     """
-    vertical_proj = mv.plane(*norm_vec, new_point[0], new_point[1])
-    symbol_sin = mv.symbol(vertical_proj, new_point[2])
+    vertical_proj = plane(*norm_vec, new_point[0], new_point[1])
+    symbol_sin = symbol(vertical_proj, new_point[2])
     point_norm_vec = np.array([[new_point[0]], [new_point[1]], [new_point[2]]])
     k = np.cross(norm_vec, point_norm_vec, axisa=0, axisb=0).T
     k = k/np.linalg.norm(k)

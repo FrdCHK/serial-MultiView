@@ -6,7 +6,8 @@ description
 import copy
 import numpy as np
 
-import mv
+from .rodrigues_rotation import rodrigues_rotation
+from .Node import Node
 
 
 def recursion(data, position, depth_remain, norm_vec, accumulated_wrap, action, max_ang_v, parent, min_z=0.67):
@@ -28,22 +29,22 @@ def recursion(data, position, depth_remain, norm_vec, accumulated_wrap, action, 
     accu[calsour] += action * 2 * np.pi
     current_phase = data.loc[position, 'phase'] + accu[calsour]
     current_point = np.array([data.loc[position, 'x'], data.loc[position, 'y'], current_phase])
-    current_norm, _, current_angle = mv.rodrigues_rotation(norm_vec, current_point)
+    current_norm, _, current_angle = rodrigues_rotation(norm_vec, current_point)
     current_norm = current_norm / np.linalg.norm(current_norm)
     abs_angle = np.abs(current_angle)
     if current_norm[2, 0] < min_z:  # avoid the plane being too tilted
-        new_node = mv.Node({'prune': True, 'position': position, 'action': action, 'angle': abs_angle,
+        new_node = Node({'prune': True, 'position': position, 'action': action, 'angle': abs_angle,
                             'total': parent.data['total'] + abs_angle, 'norm': current_norm})
         return new_node
     if position > 0:  # prune the branch with angular velocity > max (excludes the first data point)
         ang_v = abs_angle / (data.loc[position, 't'] - data.loc[position-1, 't'])
         if ang_v > max_ang_v:
-            new_node = mv.Node({'prune': True, 'position': position, 'action': action, 'angle': abs_angle,
+            new_node = Node({'prune': True, 'position': position, 'action': action, 'angle': abs_angle,
                                 'total': parent.data['total'] + abs_angle, 'norm': current_norm})
             return new_node
     else:
         abs_angle = 0
-    new_node = mv.Node({'prune': False, 'position': position, 'action': action, 'angle': abs_angle,
+    new_node = Node({'prune': False, 'position': position, 'action': action, 'angle': abs_angle,
                         'total': parent.data['total'] + abs_angle, 'norm': current_norm})
     if depth_remain > 1 and position < data.index.size - 1:
         new_node.current = recursion(data, position + 1, depth_remain - 1, current_norm, accu, 0, max_ang_v, new_node, min_z)
