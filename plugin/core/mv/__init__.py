@@ -1,4 +1,4 @@
-from . import MVPrimaryFringeFitting, MVSecondaryFringeFitting, MVSnExport, MVRun, MVPostProcess
+from . import MVCalibratorStructurePrepare, MVPrimaryFringeFitting, MVSecondaryFringeFitting, MVSnExport, MVRun, MVPostProcess
 from .Calibrator import Calibrator
 from .Antenna import Antenna
 from .plane import plane

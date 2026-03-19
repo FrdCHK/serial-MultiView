@@ -1,0 +1,209 @@
+{# For VLBA serial MultiView (sMV) with calibrator source structure correction #}
+config:
+{% for key in config.keys() %}
+{% if config[key] == '' %}
+  {{ key }}: ''
+{% else %}
+  {{ key }}: {{ config[key] }}
+{% endif %}
+{% endfor %}
+plugins:
+  - name: AipsCatalog
+    params: {}
+  - name: AipsInit
+    params:
+      userno: {{ userno }}
+  - name: Fitld
+    params:
+      datain: {{ idifits }}
+      outname: {{ exp_name }}
+      outclass: UVDATA
+      out_cat_ident: ORIGIN
+  - name: GetObsInfo
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      listr_outprint: {{ workspace }}/scan.txt
+      prtan_outprint: {{ workspace }}/antenna.txt
+  - name: Accor
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      identifier: ACCOR
+  - name: Clcal
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      sn_source: ACCOR
+      cl_source: FITLD
+      identifier: CLCAL(ACCOR)
+  - name: Apcal
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      identifier: APCAL
+  - name: Clcal
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      sn_source: APCAL
+      cl_source: CLCAL(ACCOR)
+      identifier: CLCAL(APCAL)
+  - name: Clcor
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      opcode: PANG
+      clcorprm: [1, 0]
+      cl_source: CLCAL(APCAL)
+      identifier: CLCOR(PANG)
+  - name: Eop
+    params:
+      eop_path: {{ eop_path }}
+  - name: Clcor
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      opcode: EOPS
+      infile: {{ eop_path }}
+      cl_source: CLCOR(PANG)
+      identifier: CLCOR(EOPS)
+  - name: Ionex
+    params:
+      ionex_dir: {{ ionex_dir }}
+  - name: Tecor
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      aparm: [1, 0]
+      cl_source: CLCOR(EOPS)
+      identifier: TECOR
+  - name: RefAntSelect
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      auto_ref_ant: {{ auto_ref_ant }}
+      ref_ant: {{ ref_ant }}
+  - name: Fring
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      calsour: [$mpc_calsour:name$]
+      timerang: [0, 0, 0, 0, $mpc_calsour:end_time:day$, $mpc_calsour:end_time:hour$, $mpc_calsour:end_time:minute$, $mpc_calsour:end_time:second$]
+      refant: $ref_ant:ID$
+      aparm: [2, 0, 0, 0, 0, 0, 7]
+      dparm: [0, 0, 0, 0, 0, 0, 0, 1, 0]
+      solint: -1
+      docalib: 1
+      cl_source: TECOR
+      identifier: FRING(MPC)
+  - name: Clcal
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      calsour: [$mpc_calsour:name$]
+      opcode: CALP
+      interpol: AMBG
+      smotyp: VLBI
+      bparm: [0, 0, 1, 0]
+      sn_source: FRING(MPC)
+      cl_source: TECOR
+      identifier: CLCAL(MPC)
+  - name: PRSourceSelect
+    params:
+      inname: {{ exp_name }}
+      inclass: UVDATA
+      indisk: {{ indisk }}
+      in_cat_ident: ORIGIN
+      cl_source: CLCAL(MPC)
+{% if predef_source_list is defined %}
+      load: {{ predef_source_list }}
+{% endif %}
+  - name: MVPrimaryCalibratorSelect
+    params:
+      indisk: {{ indisk }}
+      possm: True
+  - name: MVCalibratorStructurePrepare
+    params:
+      indisk: {{ indisk }}
+      aparm: [2, 0, 1, 0, 0, 0, 5]
+      dparm: [0]
+      solint: -1
+      opcode: CALP
+      interpol: AMBG
+      smotyp: VLBI
+      bparm: [0, 0, 1, 0]
+      split_aparm: [2, 0]
+  - name: MVPrimaryFringeFitting
+    params:
+      indisk: {{ indisk }}
+      aparm: [2, 0, 1, 0, 0, 0, 5]
+      dparm: [0]
+      solint: -1
+      opcode: CALP
+      interpol: AMBG
+      smotyp: VLBI
+      bparm: [0, 0, 1, 0]
+      structure: True
+      cmethod: DFT
+      cmodel: COMP
+      cparm: [0, 1]
+  - name: MVSecondaryFringeFitting
+    params:
+      indisk: {{ indisk }}
+      aparm: [2, 0, 1, 0, 0, 0, 5]
+      dparm: [0]
+      solint: -1
+      opcode: CALP
+      interpol: AMBG
+      smotyp: VLBI
+      bparm: [0, 0, 1, 0]
+      structure: True
+      cmethod: DFT
+      cmodel: COMP
+      cparm: [0, 1]
+  - name: MVSnExport
+    params:
+      indisk: {{ indisk }}
+  - name: MVRun
+    params:
+      max_depth: {{ max_depth }}
+      max_ang_v: {{ max_ang_v }}
+      min_z: {{ min_z }}
+      weight: {{ weight }}
+      kalman_factor: {{ kalman_factor }}
+      smo_half_window: {{ smo_half_window }}
+  - name: MVPostProcess
+    params:
+      indisk: {{ indisk }}
+      cellsize: {{ cellsize }}
+      imsize: {{ imsize }}
+      niter: {{ niter }}
+      gain: {{ gain }}
+      ltype: {{ ltype }}
+      uvwtfn: '{{ uvwtfn }}'
+      jmfit: {{ jmfit }}
+  - name: Exit
+    params: {}

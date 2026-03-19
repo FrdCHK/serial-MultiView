@@ -41,6 +41,7 @@ A modular VLBI pipeline framework with a focus on serial MultiView (sMV) phase p
 - `template/vlba_pr_calsour_struc.yaml.j2`: PR with calibrator self-cal and structure correction
 - `template/vlba_selfcal_mapping.yaml.j2`: self-cal mapping workflow
 - `template/vlba_smv.yaml.j2`: serial MultiView workflow (sMV)
+- `template/vlba_smv_calsour_struc.yaml.j2`: serial MultiView with calibrator structure correction
 
 Each template expands a `config:` section and a sequential `plugins:` list. The order in the list is the pipeline order.
 

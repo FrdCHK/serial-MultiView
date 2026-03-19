@@ -57,18 +57,24 @@ class MVSnExport(Plugin):
             for calibrator in calibrators:
                 if int(calibrator["ID"]) == primary_id:
                     continue
-                sn_source = f"FRING({calibrator['NAME']})"
-                ext = context.get_context()["loaded_plugins"]["AipsCatalog"].search_ext(
-                    context,
-                    target["NAME"],
-                    "SPLAT",
-                    indisk,
-                    int(params_target["inseq"]),
-                    "SN",
-                    ext_source=sn_source,
-                )
+                sn_sources = [f"FRING({calibrator['NAME']} STRUC)", f"FRING({calibrator['NAME']})"]
+                ext = {"status": False}
+                sn_source = ""
+                for source in sn_sources:
+                    ext = context.get_context()["loaded_plugins"]["AipsCatalog"].search_ext(
+                        context,
+                        target["NAME"],
+                        "SPLAT",
+                        indisk,
+                        int(params_target["inseq"]),
+                        "SN",
+                        ext_source=source,
+                    )
+                    if ext["status"]:
+                        sn_source = source
+                        break
                 if not ext["status"]:
-                    context.logger.error(f"SN table not found for {sn_source} on target {target['NAME']}")
+                    context.logger.error(f"SN table not found for calibrator {calibrator['NAME']} on target {target['NAME']}")
                     return False
                 snver = context.get_context()["aips_catalog"][ext["cat_index"]]["ext"][ext["ext_index"]]["version"][ext["ver_index"]]["num"]
                 calibrator["SN"] = int(snver)
@@ -81,7 +87,7 @@ class MVSnExport(Plugin):
                     sn_df.loc[sn_df.index.size] = [row_sn.time, row_sn.antenna_no, row_sn.source_id] + if_value
                 sn_path = os.path.join(sn_dir, f"{target['ID']}-{target['NAME']}-SN{snver}.csv")
                 sn_df.to_csv(sn_path, index=False)
-                context.logger.info(f"SN{snver}({calibrator['NAME']}) for {target['NAME']} exported")
+                context.logger.info(f"SN{snver}({sn_source}) for {target['NAME']} exported")
 
             target_conf = {
                 "PRIMARY_CALIBRATOR": primary,

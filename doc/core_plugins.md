@@ -39,6 +39,7 @@ These are thin wrappers around AIPSTask. All log start/end and register SN/CL ta
 - `PRTargetMapping`: PR target imaging and optional JMFIT.
 
 ## MV workflow (`plugin/core/mv`)
+- `MVCalibratorStructurePrepare`: build calibrator structure models (FRING/CLCAL, SPLIT/FITTP, difmap).
 - `MVPrimaryFringeFitting`: FRING primary calibrator and apply to all sources.
 - `MVSecondaryFringeFitting`: FRING secondary calibrators only.
 - `MVSnExport`: export SN tables for MV.

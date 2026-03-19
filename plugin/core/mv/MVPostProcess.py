@@ -24,7 +24,7 @@ class MVPostProcess(Plugin):
     @classmethod
     def get_description(cls) -> str:
         return "Apply MultiView SN tables, run CLCAL, SPLIT, IMAGR, and optional JMFIT. " \
-               "Plugins required: AipsCatalog, GeneralTask, PRCalibratorFringeFitting, MVRun. " \
+               "Plugins required: AipsCatalog, GeneralTask, Imagr, PRCalibratorFringeFitting, MVRun. " \
                "Parameters required: indisk, cellsize, imsize, niter, gain, ltype, uvwtfn; optional: jmfit, aparm."
 
     def run(self, context: Context) -> bool:
@@ -74,18 +74,24 @@ class MVPostProcess(Plugin):
             context.logger.debug(f"SPLAT catalog seq for {target['NAME']}: {params_target['inseq']}")
 
             splat = WizAIPSData(target["NAME"], "SPLAT", indisk, int(params_target["inseq"]))
-            primary_sn_src = f"FRING({primary['NAME']})"
-            ext = context.get_context()["loaded_plugins"]["AipsCatalog"].search_ext(
-                context,
-                target["NAME"],
-                "SPLAT",
-                indisk,
-                int(params_target["inseq"]),
-                "SN",
-                ext_source=primary_sn_src,
-            )
+            primary_sn_sources = [f"FRING({primary['NAME']} STRUC)", f"FRING({primary['NAME']})"]
+            ext = {"status": False}
+            primary_sn_src = ""
+            for source in primary_sn_sources:
+                ext = context.get_context()["loaded_plugins"]["AipsCatalog"].search_ext(
+                    context,
+                    target["NAME"],
+                    "SPLAT",
+                    indisk,
+                    int(params_target["inseq"]),
+                    "SN",
+                    ext_source=source,
+                )
+                if ext["status"]:
+                    primary_sn_src = source
+                    break
             if not ext["status"]:
-                context.logger.error(f"Primary SN table not found for {primary_sn_src}")
+                context.logger.error(f"Primary SN table not found for target {target['NAME']}")
                 return False
             primary_snver = context.get_context()["aips_catalog"][ext["cat_index"]]["ext"][ext["ext_index"]]["version"][ext["ver_index"]]["num"]
             context.logger.debug(f"Primary SN version for {target['NAME']}: {primary_snver}")
@@ -188,8 +194,24 @@ class MVPostProcess(Plugin):
             })
             task_clcal.run(context)
 
+            primary_cl_sources = [f"CLCAL(FRING({primary['NAME']} STRUC))", f"CLCAL(FRING({primary['NAME']}))"]
+            primary_cl_source = primary_cl_sources[-1]
+            for source in primary_cl_sources:
+                ext = context.get_context()["loaded_plugins"]["AipsCatalog"].search_ext(
+                    context,
+                    target["NAME"],
+                    "SPLAT",
+                    indisk,
+                    int(params_target["inseq"]),
+                    "CL",
+                    ext_source=source,
+                )
+                if ext["status"]:
+                    primary_cl_source = source
+                    break
+
             context.logger.info(f"SPLIT(PR) for {target['NAME']}")
-            self.split_only(context, target, indisk, "PR", f"CLCAL(FRING({primary['NAME']}))")
+            self.split_only(context, target, indisk, "PR", primary_cl_source)
             context.logger.info(f"SPLIT(MV) for {target['NAME']}")
             self.split_only(context, target, indisk, "MV", "CLCAL(MV)")
 
@@ -201,8 +223,8 @@ class MVPostProcess(Plugin):
             if not antennas_exclude.empty:
                 context.logger.debug(f"UVFLG exclude antennas for {target['NAME']}: {antennas_exclude['ID'].tolist()}")
                 for _, row in antennas_exclude.iterrows():
-                    self.run_uvflg(context, target, indisk, int(row["ID"]), [0 for _ in range(8)], 1)
-                    self.run_uvflg(context, target, indisk, int(row["ID"]), [0 for _ in range(8)], 2)
+                    self.run_uvflg(context, target, indisk, int(row["ID"]), [0 for _ in range(8)], "PR")
+                    self.run_uvflg(context, target, indisk, int(row["ID"]), [0 for _ in range(8)], "MV")
 
             pr_split_ident = f"{target['NAME']} PR"
             if ("rashift" not in target) or ("decshift" not in target):
@@ -236,7 +258,6 @@ class MVPostProcess(Plugin):
         return True
 
     def split_only(self, context: Context, target: Dict[str, Any], indisk: int, tag: str, cl_source: str) -> None:
-        outseq = 1 if tag == "PR" else 2
         params_target = {"in_cat_ident": f"{target['NAME']} WITH CALIBRATORS"}
         context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, params_target)
         cl_params = {
@@ -259,16 +280,16 @@ class MVPostProcess(Plugin):
             "docalib": 1,
             "gainuse": cl_params["gainuse"],
             "outdisk": indisk,
-            "outseq": outseq,
             "aparm": self.params.get("aparm", [2, 0]),
         }
 
         task_split = context.get_context()["loaded_plugins"]["GeneralTask"]({"task_name": "SPLIT", **params_split})
         task_split.run(context)
 
+        split_ident = f"{target['NAME']} {tag}"
         try:
             context.get_context()["loaded_plugins"]["AipsCatalog"].add_catalog(
-                context, target["NAME"], "SPLIT", indisk, f"{target['NAME']} {tag}", cat_seq=outseq, history="Created by SPLIT"
+                context, target["NAME"], "SPLIT", indisk, split_ident, history="Created by SPLIT"
             )
         except Exception:
             pass
@@ -286,55 +307,72 @@ class MVPostProcess(Plugin):
                 timerang[:4] = float_to_time_components(timerange[0])
                 timerang[4:] = float_to_time_components(timerange[1])
                 context.logger.debug(f"UVFLG antenna={antenna_id} timerang={timerang}")
-                self.run_uvflg(context, target, indisk, antenna_id, timerang, 1)
-                self.run_uvflg(context, target, indisk, antenna_id, timerang, 2)
+                self.run_uvflg(context, target, indisk, antenna_id, timerang, "PR")
+                self.run_uvflg(context, target, indisk, antenna_id, timerang, "MV")
 
-    def run_uvflg(self, context: Context, target: Dict[str, Any], indisk: int, antenna_id: int, timerang, inseq: int) -> None:
+    def run_uvflg(self, context: Context, target: Dict[str, Any], indisk: int, antenna_id: int, timerang, tag: str) -> None:
+        params_split = {"in_cat_ident": f"{target['NAME']} {tag}"}
+        if not context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, params_split):
+            context.logger.error(f"SPLIT catalog not found for UVFLG: {target['NAME']} {tag}")
+            return
         task_uvflg = context.get_context()["loaded_plugins"]["GeneralTask"]({
             "task_name": "UVFLG",
             "inname": target["NAME"],
             "inclass": "SPLIT",
             "indisk": indisk,
-            "inseq": inseq,
+            "inseq": params_split["inseq"],
             "antennas": [int(antenna_id)],
             "timerang": timerang,
         })
         task_uvflg.run(context)
 
     def export_fits(self, context: Context, target: Dict[str, Any], indisk: int, tag: str) -> None:
-        outseq = 1 if tag == "PR" else 2
+        split_ident = f"{target['NAME']} {tag}"
+        imagr_ident = f"{split_ident} IMAGR"
         base_dir = os.path.join(context.get_context()["config"]["workspace"], "targets", target["NAME"])
+        params_split = {"in_cat_ident": split_ident}
+        if not context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, params_split):
+            context.logger.error(f"SPLIT catalog not found for FITTP: {split_ident}")
+            return
         split_path = os.path.join(base_dir, f"{target['ID']}-{target['NAME']}-SPLIT-{tag}.fits")
         task_fittp = context.get_context()["loaded_plugins"]["GeneralTask"]({
             "task_name": "FITTP",
             "inname": target["NAME"],
             "inclass": "SPLIT",
             "indisk": indisk,
-            "inseq": outseq,
+            "inseq": params_split["inseq"],
             "dataout": split_path,
         })
         task_fittp.run(context)
 
+        params_imagr = {"in_cat_ident": imagr_ident}
+        if not context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, params_imagr):
+            context.logger.error(f"IMAGR catalog not found for FITTP: {imagr_ident}")
+            return
         img_path = os.path.join(base_dir, f"{target['ID']}-{target['NAME']}-{tag}.fits")
         task_fittp_img = context.get_context()["loaded_plugins"]["GeneralTask"]({
             "task_name": "FITTP",
             "inname": target["NAME"],
             "inclass": "ICL001",
             "indisk": indisk,
-            "inseq": outseq,
+            "inseq": params_imagr["inseq"],
             "dataout": img_path,
         })
         task_fittp_img.run(context)
 
     def run_jmfit(self, context: Context, target: Dict[str, Any], indisk: int, tag: str) -> None:
-        outseq = 1 if tag == "PR" else 2
+        imagr_ident = f"{target['NAME']} {tag} IMAGR"
+        params_imagr = {"in_cat_ident": imagr_ident}
+        if not context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, params_imagr):
+            context.logger.error(f"IMAGR catalog not found for JMFIT: {imagr_ident}")
+            return
         jmfit_path = os.path.join(context.get_context()["config"]["workspace"], "targets", target["NAME"], f"{target['ID']}-{target['NAME']}-{tag}.jmfit")
         task_jmfit = context.get_context()["loaded_plugins"]["GeneralTask"]({
             "task_name": "JMFIT",
             "inname": target["NAME"],
             "inclass": "ICL001",
             "indisk": indisk,
-            "inseq": outseq,
+            "inseq": params_imagr["inseq"],
             "doprint": -3,
             "prtlev": 2,
             "fitout": jmfit_path,
@@ -343,7 +381,8 @@ class MVPostProcess(Plugin):
         task_jmfit.run(context)
 
     def run_imagr(self, context: Context, target: Dict[str, Any], indisk: int, tag: str) -> None:
-        outseq = 1 if tag == "PR" else 2
+        split_ident = f"{target['NAME']} {tag}"
+        imagr_ident = f"{split_ident} IMAGR"
         rashift = float(target["rashift"])
         decshift = float(target["decshift"])
         cellsize = self.params["cellsize"]
@@ -356,12 +395,11 @@ class MVPostProcess(Plugin):
                             f"niter={self.params['niter']}, gain={self.params['gain']}, "
                             f"ltype={self.params['ltype']}, uvwtfn={self.params['uvwtfn']}, "
                             f"rashift={rashift}, decshift={decshift}")
-        task_imagr = context.get_context()["loaded_plugins"]["GeneralTask"]({
-            "task_name": "IMAGR",
+        task_imagr = context.get_context()["loaded_plugins"]["Imagr"]({
             "inname": target["NAME"],
             "inclass": "SPLIT",
             "indisk": indisk,
-            "inseq": outseq,
+            "in_cat_ident": split_ident,
             "srcname": target["NAME"],
             "cellsize": cellsize,
             "imsize": imsize,
@@ -373,6 +411,6 @@ class MVPostProcess(Plugin):
             "decshift": [decshift],
             "uvwtfn": self.params["uvwtfn"],
             "dotv": 0,
-            "outseq": outseq,
+            "out_cat_ident": imagr_ident,
         })
         task_imagr.run(context)
