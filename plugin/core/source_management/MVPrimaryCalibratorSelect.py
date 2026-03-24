@@ -121,7 +121,21 @@ class MVPrimaryCalibratorSelect(SourceSelect):
         w.wcs.cdelt = np.array([-0.002, 0.002])
         w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
 
-        fig = Figure(figsize=(8, 8))
+        target_xpix, target_ypix = w.world_to_pixel(target_coord)
+        calibrator_xpix, calibrator_ypix = w.world_to_pixel(calibrator_coords)
+
+        all_xpix = np.concatenate((np.array([target_xpix]), np.atleast_1d(calibrator_xpix)))
+        all_ypix = np.concatenate((np.array([target_ypix]), np.atleast_1d(calibrator_ypix)))
+
+        # Choose a dynamic figure ratio from source footprint while keeping window size bounded.
+        x_span = float(np.ptp(all_xpix)) + 1.0
+        y_span = float(np.ptp(all_ypix)) + 1.0
+        ratio = np.clip(x_span / y_span, 0.25, 4.0)
+        base_size = 8.0
+        fig_width = base_size * float(np.sqrt(ratio))
+        fig_height = base_size / float(np.sqrt(ratio))
+
+        fig = Figure(figsize=(fig_width, fig_height))
         ax = fig.add_subplot(111, projection=w)
         ax.set_xlabel("RA")
         ax.set_ylabel("DEC")
@@ -130,12 +144,10 @@ class MVPrimaryCalibratorSelect(SourceSelect):
         ax.coords[0].set_format_unit(u.hourangle)
         ax.coords[1].set_format_unit(u.deg)
 
-        xpix, ypix = w.world_to_pixel(target_coord)
-        ax.plot(xpix, ypix, marker="^", markersize=8, color="#A52C2C")
-        ax.text(xpix, ypix - 140, f"TARGET\n{target['NAME']}", ha="center", va="center")
+        ax.plot(target_xpix, target_ypix, marker="^", markersize=8, color="#A52C2C")
+        ax.text(target_xpix, target_ypix - 140, f"TARGET\n{target['NAME']}", ha="center", va="center")
 
-        xpix, ypix = w.world_to_pixel(calibrator_coords)
-        for i, (x, y) in enumerate(zip(xpix, ypix)):
+        for i, (x, y) in enumerate(zip(calibrator_xpix, calibrator_ypix)):
             ax.plot(x, y, marker="o", markersize=8, color="#238823")
             ax.text(x, y - 80, f"{calibrators.at[i, 'ID']} {calibrators.at[i, 'NAME']}", ha="center", va="center")
 
