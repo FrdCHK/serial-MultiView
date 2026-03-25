@@ -47,6 +47,8 @@ class MVSecondaryFringeFitting(Plugin):
                     "in_cat_ident": f"{target['NAME']} WITH CALIBRATORS",
                     "calsour": [calibrator["NAME"]],
                     "timerang": [0],
+                    "bchan": int(context.get_context()["no_chan"] * 0.08),
+                    "echan": int(context.get_context()["no_chan"] * 0.92),
                     "refant": context.get_context()["ref_ant"]["ID"],
                     "aparm": self.params["aparm"],
                     "dparm": self.params["dparm"],

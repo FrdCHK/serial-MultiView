@@ -13,6 +13,8 @@ max_ang_v: 700.0
 min_z: 0.7
 kalman_factor: 0.08
 smo_half_window: 5
+delay_smo_half_window: 5
+delay_kalman_factor: 0.08
 weight: 0.4
 cellsize: 0.0005
 imsize: 128

@@ -16,7 +16,7 @@ from .rodrigues_rotation import rodrigues_rotation
 
 
 class Antenna:
-    def __init__(self, antenna_id, antenna_name, data, calibrators):
+    def __init__(self, antenna_id, antenna_name, data, calibrators, delay_data=None):
         """
         antenna class for MultiView
         :param antenna_id: antenna id
@@ -45,6 +45,20 @@ class Antenna:
         self.target_pos = None
 
         self.reverse = False
+
+        # Delay interpolation branch (mbdelay), independent from phase adjustment.
+        if delay_data is None:
+            delay_data = pd.DataFrame(columns=['calsour', 'x', 'y', 't'])
+        self.original_delay_data = delay_data.copy(deep=True)
+        self.original_delay_data.reset_index(drop=True, inplace=True)
+        self.delay_data = self.original_delay_data.copy(deep=True)
+        self.delay_adjust_info = pd.DataFrame(data=np.zeros(shape=(self.original_delay_data.index.size, 1)),
+                                              columns=['flag']).astype({'flag': int})
+        self.delay_t_flag_info = []
+        self.delay_mv_result = None
+        self.delay_mv_t = None
+        self.delay_if_ids = []
+        self.delay_scale = 1.0
 
     def multiview(self, max_depth=4, max_ang_v=864., min_z=0.67, weight=1., kalman_factor=None, smo_half_window=None):
         """
@@ -249,6 +263,237 @@ class Antenna:
 
         return fig
 
+    def delay_multiview(self, max_depth=4, max_ang_v=864., min_z=0.67, weight=1., kalman_factor=0.08, smo_half_window=None):
+        """
+        Delay interpolation without phase ambiguity handling.
+        :param max_depth: max depth of recursion, defaults to 4
+        :param max_ang_v: max angular velocity of plane rotation, controls the threshold for pruning, defaults to 864.
+        :param min_z: minimum z value of normal vector, defaults to 0.67
+        :param weight: weight of the total rotation angle in recursion, defaults to 1.
+        :param kalman_factor: Kalman filter process noise that controls smooth effect and filter delay, defaults to 0.08.
+        :param smo_half_window: half width of moving smoothing window, defaults to None
+        """
+        if self.original_delay_data.empty:
+            self.delay_mv_result = np.array([])
+            self.delay_mv_t = np.array([])
+            return
+        self.update_delay_data()
+        if self.delay_data.empty:
+            self.delay_mv_result = np.array([])
+            self.delay_mv_t = np.array([])
+            return
+
+        self.delay_if_ids = [int(col[1:]) for col in self.delay_data.columns if col.startswith('d')]
+        if not self.delay_if_ids:
+            self.delay_mv_result = np.array([])
+            self.delay_mv_t = np.array([])
+            return
+
+        extend_length = 10
+        data_extended = self._get_extended_delay_data(extend_length)
+        self.delay_scale = 1e9
+        for if_id in self.delay_if_ids:
+            col = f"d{if_id}"
+            if col in data_extended.columns:
+                data_extended[col] = data_extended[col] * self.delay_scale
+        delay_results = {}
+        for if_id in self.delay_if_ids:
+            col = f"d{if_id}"
+            norm_vec = np.array([[0], [0], [1]])
+            result = []
+            root_node = Node({'prune': False, 'position': -1, 'action': 0, 'angle': 0, 'total': 0, 'norm': np.zeros((3, 1))})
+            calsour = data_extended['calsour'].unique()
+            accu = {sour: 0. for sour in calsour}
+            z_lim = min_z
+            ang_v = max_ang_v
+            n = 3
+            A = np.eye(n)
+            H = np.eye(n)
+            Q = np.eye(n) * kalman_factor
+            R = np.eye(n) * 0.1
+            x_hat = np.zeros((n, 1))
+            P = np.eye(n)
+            for i in range(data_extended.index.size):
+                data_view = data_extended.rename(columns={col: "phase"})
+                root_node.current = recursion(data_view, i, max_depth, norm_vec, accu, 0, ang_v, root_node, z_lim)
+                norm_series = None
+                if i > 5:
+                    norm_series = np.zeros((i, 4))
+                    norm_series[:, 0] = data_extended.loc[:i - 1, 't']
+                    norm_series[:, 1:] = np.array(result)
+                    norm_series = norm_series[-6:, :]
+                min_node, min_path = find_min_leaf(norm_series, data_extended['t'], i, root_node, norm_vec, weight, (max_depth, max_ang_v, min_z))
+                if min_node is None:
+                    result.append(norm_vec.flatten())
+                    root_node = Node({'prune': False, 'position': i, 'action': 0, 'angle': 0, 'total': 0, 'norm': norm_vec})
+                    continue
+                selected_next = min_path[1]
+                # Kalman filter for bias
+                x_hat = A @ x_hat
+                P = A @ P @ A.T + Q
+                K = P @ H.T @ np.linalg.inv(H @ P @ H.T + R)
+                x_hat = x_hat + K @ (selected_next['norm'] - H @ x_hat)
+                P = (np.eye(n) - K @ H) @ P
+                new_norm = x_hat
+                result.append(new_norm.flatten())
+                root_node = Node(selected_next)
+                root_node.data['norm'] = new_norm
+                norm_vec = new_norm
+            delay_results[if_id] = np.array(result[extend_length:])
+
+        self.delay_mv_result = delay_results
+        if self.reverse and self.delay_data.index.size > 0:
+            self.delay_mv_t = -(np.array(data_extended['t'])[extend_length:] - 2 * self.delay_data['t'].iloc[-1])
+        else:
+            self.delay_mv_t = np.array(data_extended['t'])[extend_length:]
+
+        if smo_half_window is not None and smo_half_window > 0:
+            self._lowpass_filter_delay(smo_half_window)
+
+    def delay_flag(self, timerange, calibrators, mode='flag'):
+        flag_index = (self.original_delay_data['t'] >= timerange[0]) & (self.original_delay_data['t'] <= timerange[1])
+        calibrator_index = self.original_delay_data['calsour'].isin(calibrators)
+        criteria_index = flag_index & calibrator_index
+        if mode == 'flag':
+            self.delay_adjust_info.loc[criteria_index, 'flag'] = 1
+        elif mode == 'unflag':
+            self.delay_adjust_info.loc[criteria_index, 'flag'] = 0
+        else:
+            raise ValueError('available modes are: flag, unflag')
+        self.update_delay_data()
+
+    def delay_t_flag(self, timerange, mode='flag'):
+        if mode == 'flag':
+            range_to_append = timerange
+            range_list = copy.deepcopy(self.delay_t_flag_info)
+            loop_flag = True
+            while loop_flag:
+                loop_flag = False
+                for item in range_list:
+                    if item[0] < range_to_append[0] < range_to_append[1] < item[1]:
+                        return
+                    elif range_to_append[0] < item[0] < range_to_append[1] < item[1]:
+                        range_to_append[1] = item[1]
+                        range_list.remove(item)
+                        loop_flag = True
+                        break
+                    elif item[0] < range_to_append[0] < item[1] < range_to_append[1]:
+                        range_to_append[0] = item[0]
+                        range_list.remove(item)
+                        loop_flag = True
+                        break
+                    elif range_to_append[0] < item[0] < item[1] < range_to_append[1]:
+                        range_list.remove(item)
+                        loop_flag = True
+                        break
+            range_list.append(range_to_append)
+            self.delay_t_flag_info = range_list
+        elif mode == 'unflag':
+            range_to_remove = timerange
+            range_list = copy.deepcopy(self.delay_t_flag_info)
+            loop_flag = True
+            while loop_flag:
+                loop_flag = False
+                for item in range_list:
+                    if item[0] < range_to_remove[0] < range_to_remove[1] < item[1]:
+                        range_list.append([item[0], range_to_remove[0]])
+                        range_list.append([range_to_remove[1], item[1]])
+                        range_list.remove(item)
+                        loop_flag = True
+                        break
+                    elif range_to_remove[0] < item[0] < range_to_remove[1] < item[1]:
+                        range_list.append([range_to_remove[1], item[1]])
+                        range_list.remove(item)
+                        loop_flag = True
+                        break
+                    elif item[0] < range_to_remove[0] < item[1] < range_to_remove[1]:
+                        range_list.append([item[0], range_to_remove[0]])
+                        range_list.remove(item)
+                        loop_flag = True
+                        break
+                    elif range_to_remove[0] < item[0] < item[1] < range_to_remove[1]:
+                        range_list.remove(item)
+                        loop_flag = True
+                        break
+            self.delay_t_flag_info = range_list
+        else:
+            raise ValueError('available modes are: flag, unflag')
+
+    def delay_reset(self):
+        self.delay_adjust_info.iloc[:, :] = 0
+        self.delay_t_flag_info = []
+        self.update_delay_data()
+
+    def plot_delay(self, target_pos, if_id=0):
+        self.target_pos = target_pos
+        markers = ['o', 'd', '^', 's', 'v', 'p', '*', '8', '<', '>']
+        fig, ax = plt.subplots(1, 1, figsize=(8, 3))
+        fig.subplots_adjust(left=0.06, right=0.99, top=0.98, bottom=0.1)
+
+        if isinstance(self.delay_mv_result, dict) and if_id in self.delay_mv_result:
+            mv_target_delay = []
+            for i in range(self.delay_mv_result[if_id].shape[0]):
+                mv_target_delay.append(plane(*self.delay_mv_result[if_id][i], *self.target_pos))
+            mv_target_delay = np.array(mv_target_delay) / self.delay_scale
+            ax.plot(self.delay_mv_t, mv_target_delay, 'x', color='k', ls='', label='Target')
+
+        for i, item in enumerate(self.secondary_calibrators):
+            plot_data = self.original_delay_data.copy(deep=True)
+            non_flagged_index = self.delay_adjust_info['flag'] == 0
+            plot_data = plot_data.loc[non_flagged_index]
+            plot_data = plot_data.loc[plot_data['calsour'] == item.id]
+            if not plot_data.empty:
+                col = f"d{if_id}"
+                if col in plot_data.columns:
+                    ax.plot(plot_data['t'], plot_data[col], ls='none', marker=markers[i], label=item.name)
+
+        flagged_index = self.delay_adjust_info['flag'] == 1
+        flagged_data = self.original_delay_data.loc[flagged_index].copy(deep=True)
+        flagged_data.reset_index(drop=True, inplace=True)
+        for i, item in enumerate(self.secondary_calibrators):
+            plot_data = flagged_data.loc[flagged_data['calsour'] == item.id]
+            if not plot_data.empty:
+                col = f"d{if_id}"
+                if col in plot_data.columns:
+                    ax.plot(plot_data['t'], plot_data[col], ls='none', marker=markers[i], c=self.colors[i], alpha=0.3)
+
+        ax.set_xlabel("time (day)")
+        ax.set_ylabel("delay (s)")
+        for item in self.delay_t_flag_info:
+            y_lim = ax.get_ylim()
+            ax.fill_betweenx(y_lim, item[0], item[1], color='#FFB6C1', alpha=0.15)
+            ax.set_ylim(y_lim)
+        ax.legend()
+        return fig
+
+    def apply_delay_phase_correction(self, target_pos, if_freq, if_id=0):
+        # if not isinstance(self.delay_mv_result, dict):
+        #     return
+        # if if_id not in self.delay_mv_result:
+        #     return
+        # if self.delay_mv_t is None or len(self.delay_mv_t) == 0:
+        #     return
+        # mv_target_delay = []
+        # for i in range(self.delay_mv_result[if_id].shape[0]):
+        #     mv_target_delay.append(plane(*self.delay_mv_result[if_id][i], *target_pos) / self.delay_scale)
+        # mv_target_delay = np.array(mv_target_delay)
+        # if mv_target_delay.size == 0:
+        #     return
+        # t_data = np.array(self.original_data['t'])
+        # delay_corr = np.interp(t_data, self.delay_mv_t, mv_target_delay,
+        #                        left=mv_target_delay[0], right=mv_target_delay[-1])
+        # phase_offset = delay_corr * float(if_freq) * 2e9 * np.pi
+        # phase = self.original_data['phase'].to_numpy() - phase_offset
+        # phase = (phase + np.pi) % (2 * np.pi) - np.pi
+        # self.original_data['phase'] = phase
+
+        phase_offset = self.delay_data["d1"] * float(if_freq) * 2e9 * np.pi
+        phase = self.original_data['phase'].to_numpy() - phase_offset
+        phase = (phase + np.pi) % (2 * np.pi) - np.pi
+        self.original_data['phase'] = phase
+
+        self.update_data()
+
     def save(self, adj_dir, mv_dir):
         """
         Save adjustment and MultiView results
@@ -264,6 +509,17 @@ class Antenna:
         mv_table = pd.DataFrame({'t': self.mv_t, 'phase': mv_target_phase_wrap})
         mv_table.to_csv(mv_dir, index=False)
 
+    def save_delay(self, delay_adj_dir, delay_mv_dir):
+        self.delay_adjust_info.to_csv(delay_adj_dir, index=False)
+        mv_table = pd.DataFrame({'t': self.delay_mv_t if self.delay_mv_t is not None else []})
+        if isinstance(self.delay_mv_result, dict):
+            for if_id, mv_res in self.delay_mv_result.items():
+                mv_target_delay = []
+                for i in range(mv_res.shape[0]):
+                    mv_target_delay.append(plane(*mv_res[i], *self.target_pos) / self.delay_scale)
+                mv_table[f"d{if_id}"] = mv_target_delay
+        mv_table.to_csv(delay_mv_dir, index=False)
+
     def update_data(self):
         self.data = self.original_data.copy(deep=True)
         self.data['phase'] += self.adjust_info['wrap'] * np.pi * 2
@@ -276,6 +532,51 @@ class Antenna:
         self.accu_data['phase'] += self.accu_info['accu']
         self.accu_data = self.accu_data.loc[non_flagged_index]
         self.accu_data.reset_index(drop=True, inplace=True)
+
+    def update_delay_data(self):
+        self.delay_data = self.original_delay_data.copy(deep=True)
+        if self.delay_data.empty:
+            return
+        non_flagged_index = self.delay_adjust_info['flag'] == 0
+        self.delay_data = self.delay_data.loc[non_flagged_index]
+        self.delay_data.reset_index(drop=True, inplace=True)
+
+    def _get_extended_delay_data(self, extend_length=10):
+        data_extended = self.delay_data.copy(deep=True)
+        if data_extended.index.size == 0 or extend_length <= 0:
+            return data_extended
+        data_rev = data_extended.iloc[::-1, :].copy(deep=True)
+        t = data_extended['t'].copy(deep=True)
+        if self.reverse:
+            data_rev['t'] = -t + 2 * t.iloc[-1]
+            data_extended = pd.concat([data_extended.iloc[-(extend_length + 1):-1], data_rev], axis=0)
+        else:
+            data_rev['t'] = -t + 2 * t.iloc[0]
+            data_extended = pd.concat([data_rev.iloc[-(extend_length + 1):-1], data_extended], axis=0)
+        data_extended.reset_index(drop=True, inplace=True)
+        return data_extended
+
+    def _lowpass_filter_delay(self, smo_half_window=5):
+        if not isinstance(self.delay_mv_result, dict):
+            return
+        mv_data = {k: copy.deepcopy(v) for k, v in self.delay_mv_result.items()}
+        mv_t = np.array(self.delay_data.loc[:, 't'])
+        mv_smo = {k: copy.deepcopy(v) for k, v in mv_data.items()}
+        for if_id, arr in mv_data.items():
+            for i in range(1, arr.shape[0] - 1):
+                if i < smo_half_window:
+                    smo_window_i = i
+                elif i >= arr.shape[0] - smo_half_window:
+                    smo_window_i = arr.shape[0] - 1 - i
+                else:
+                    smo_window_i = smo_half_window
+                dt = np.abs(mv_t[i] - mv_t[i - smo_window_i:i + smo_window_i + 1])
+                dt[dt == 0] = np.min(dt[dt != 0]) / np.e
+                weights = np.log(1.0 / dt)
+                weights[np.isinf(weights)] = np.max(weights[~np.isinf(weights)])
+                normalized_weights = (weights / np.sum(weights)).reshape(smo_window_i * 2 + 1, 1)
+                mv_smo[if_id][i] = np.sum(normalized_weights * arr[i - smo_window_i:i + smo_window_i + 1], axis=0)
+        self.delay_mv_result = mv_smo
 
     def _get_extended_data(self, extend_length=10):
         """

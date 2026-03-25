@@ -80,11 +80,17 @@ class MVSnExport(Plugin):
                 calibrator["SN"] = int(snver)
 
                 sn_table = splat_uv.table("SN", int(snver))
-                if_column = [f"p{if_id}" for if_id in range(context.get_context()["no_if"])]
-                sn_df = pd.DataFrame(columns=["t", "antenna", "calsour"] + if_column)
+                phase_column = [f"p{if_id}" for if_id in range(context.get_context()["no_if"])]
+                delay_column = [f"d{if_id}" for if_id in range(context.get_context()["no_if"])]
+                rate_column = [f"r{if_id}" for if_id in range(context.get_context()["no_if"])]
+                sn_df = pd.DataFrame(columns=["t", "antenna", "calsour", "mbdelay"] + phase_column + delay_column + rate_column)
                 for row_sn in sn_table:
-                    if_value = [math.atan2(row_sn.imag1[if_id], row_sn.real1[if_id]) for if_id in range(context.get_context()["no_if"])]
-                    sn_df.loc[sn_df.index.size] = [row_sn.time, row_sn.antenna_no, row_sn.source_id] + if_value
+                    no_if = context.get_context()["no_if"]
+                    phase = [math.atan2(row_sn.imag1[if_id], row_sn.real1[if_id]) for if_id in range(no_if)]
+                    delay = [row_sn.delay_1[if_id] for if_id in range(no_if)]
+                    rate = [row_sn.rate_1[if_id] for if_id in range(no_if)]
+                    mbdelay = row_sn.mbdelay1
+                    sn_df.loc[sn_df.index.size] = [row_sn.time, row_sn.antenna_no, row_sn.source_id, mbdelay] + phase + delay + rate
                 sn_path = os.path.join(sn_dir, f"{target['ID']}-{target['NAME']}-SN{snver}.csv")
                 sn_df.to_csv(sn_path, index=False)
                 context.logger.info(f"SN{snver}({sn_source}) for {target['NAME']} exported")

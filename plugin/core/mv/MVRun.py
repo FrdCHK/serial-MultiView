@@ -30,7 +30,9 @@ class MVRun(Plugin):
             return False
 
         base_config = copy.deepcopy(context.get_context()["config"])
-        for key in ["max_depth", "max_ang_v", "min_z", "weight", "kalman_factor", "smo_half_window"]:
+        base_config["if_freq"] = context.get_context().get("if_freq")
+        base_config["obs_freq"] = context.get_context().get("obs_freq")
+        for key in ["max_depth", "max_ang_v", "min_z", "weight", "kalman_factor", "smo_half_window", "delay_smo_half_window"]:
             if key in self.params:
                 base_config[key] = self.params[key]
 
@@ -71,9 +73,11 @@ class MVRun(Plugin):
 
             calibrator_table = pd.DataFrame.from_dict(target["CALIBRATORS"])
             secondary_calibrators = []
-            if_number = int(context.get_context().get("if_number", 1))
+            if_number = int(context.get_context().get("no_if", 1))
             if_column = [f"p{if_id}" for if_id in range(if_number)]
             sn_all = pd.DataFrame(columns=["t", "antenna", "calsour"] + if_column)
+            delay_columns = [f"d{if_id}" for if_id in range(if_number)]
+            sn_all_delay = pd.DataFrame(columns=["t", "antenna", "calsour"] + delay_columns)
 
             for _, row in calibrator_table.iterrows():
                 if int(row["ID"]) == int(primary["ID"]):
@@ -91,12 +95,16 @@ class MVRun(Plugin):
                 calibrator.calc_relative_position(primary_ra, primary_dec)
                 secondary_calibrators.append(calibrator)
                 sn_all = pd.concat([sn_all, sn_table], ignore_index=True)
+                if all(col in sn_table.columns for col in delay_columns):
+                    sn_all_delay = pd.concat([sn_all_delay, sn_table[["t", "antenna", "calsour"] + delay_columns]], ignore_index=True)
 
             sn_all["antenna"] = sn_all["antenna"].astype(int)
             sn_all["calsour"] = sn_all["calsour"].astype(int)
 
             for calibrator in secondary_calibrators:
                 sn_all.loc[sn_all["calsour"] == calibrator.id, ["x", "y"]] = [calibrator.dx, calibrator.dy]
+                if not sn_all_delay.empty:
+                    sn_all_delay.loc[sn_all_delay["calsour"] == calibrator.id, ["x", "y"]] = [calibrator.dx, calibrator.dy]
 
             antenna_table = pd.DataFrame.from_dict(context.get_context().get("antennas", []))
             refant_id = int(context.get_context().get("ref_ant", {}).get("ID", -1))
@@ -113,7 +121,14 @@ class MVRun(Plugin):
                 sn_if0["phase"] = sn_antenna["p0"]
                 sn_if0.sort_values(by="t", inplace=True, ascending=True)
                 sn_if0.reset_index(drop=True, inplace=True)
-                antenna = Antenna(int(row["ID"]), row["NAME"], sn_if0, secondary_calibrators)
+                delay_data = None
+                if not sn_all_delay.empty:
+                    sn_delay_antenna = sn_all_delay.loc[sn_all_delay["antenna"] == int(row["ID"])]
+                    sn_delay = sn_delay_antenna[["calsour", "x", "y", "t"] + delay_columns].copy(deep=True)
+                    sn_delay.sort_values(by="t", inplace=True, ascending=True)
+                    sn_delay.reset_index(drop=True, inplace=True)
+                    delay_data = sn_delay
+                antenna = Antenna(int(row["ID"]), row["NAME"], sn_if0, secondary_calibrators, delay_data)
                 antennas.append(antenna)
 
             target_relative_position = relative_position([primary_ra, primary_dec], [target["RA"], target["DEC"]])
@@ -134,8 +149,8 @@ class MVRun(Plugin):
 
             if run_all_flag:
                 for antenna in antennas:
-                    Gui({"ID": target["ID"], "NAME": target["NAME"]},
-                           antenna, mv_config, target_relative_position, secondary_calibrators, antenna.id in conf_ids)
+                    Gui({"ID": target["ID"], "NAME": target["NAME"], "RA": target["RA"], "DEC": target["DEC"]},
+                        primary, antenna, mv_config, target_relative_position, secondary_calibrators, antenna.id in conf_ids)
             else:
                 antenna_ids = [a.id for a in antennas]
                 while True:
@@ -145,8 +160,8 @@ class MVRun(Plugin):
                     user_input = integer_input("Select an antenna (ID) to rerun")
                     if user_input in antenna_ids:
                         antenna_index = antenna_ids.index(user_input)
-                        Gui({"ID": target["ID"], "NAME": target["NAME"]},
-                               antennas[antenna_index], mv_config, target_relative_position, secondary_calibrators, antennas[antenna_index].id in conf_ids)
+                        Gui({"ID": target["ID"], "NAME": target["NAME"], "RA": target["RA"], "DEC": target["DEC"]},
+                            primary, antennas[antenna_index], mv_config, target_relative_position, secondary_calibrators, antennas[antenna_index].id in conf_ids)
                     elif user_input == 99:
                         break
                     else:

@@ -4,6 +4,7 @@ Predict a normal vector from a previous time series slice.
 @DATE  : 2024/9/9
 """
 import numpy as np
+import logging
 # from scipy.interpolate import UnivariateSpline
 from astropy.coordinates import Angle
 import astropy.units as u
@@ -40,7 +41,11 @@ def predict(data, predict_time):
 
     # linear polyfit extrapolation with last four points
     last = sphere[-4:, 0]
-    coef = np.polyfit(time_series[-4:], last, 1)
+    try:
+        coef = np.polyfit(time_series[-4:], last, 1)
+    except Exception as e:
+        logging.getLogger(__name__).debug("predict: polyfit failed, using last value: %s", e)
+        return last[-1].reshape(3, 1)
     linear_extrapolation = np.poly1d(coef)
     t = linear_extrapolation(predict_time)
     last = sphere[-4:, 1]

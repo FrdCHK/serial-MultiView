@@ -40,10 +40,12 @@ class RootWindow:
         self.image_dir = os.path.join(self.user_exp_dir, f"{self.target['ID']}-{self.target['NAME']}-IMAGE")
         os.makedirs(self.image_dir, exist_ok=True)
         self.adj_dir = os.path.join(self.save_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-ADJ.csv")
+        self.delay_adj_dir = os.path.join(self.save_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY-ADJ.csv")
         self.conf_dir = os.path.join(self.save_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-CONF.yaml")
 
         self.config_window = None
         self.adjust_window = None
+        self.delay_adjust_window = None
 
         self.root = tk.Tk()
         self.root.title("PLOT")
@@ -101,6 +103,8 @@ class RootWindow:
         # save config and mv result
         # NOTE: must run adjust_window.save before yaml dump to ensure reverse para to be saved
         self.adjust_window.save(self.adj_dir, os.path.join(self.mv_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}.csv"))
+        if self.delay_adjust_window is not None:
+            self.delay_adjust_window.save(self.delay_adj_dir, os.path.join(self.mv_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY.csv"))
         with open(self.conf_dir, 'w') as f:
             yaml.safe_dump(self.config, f)
         # save figures
@@ -111,11 +115,17 @@ class RootWindow:
         self.adjust_window.present_phase_fig.savefig(os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-PHASE.png"), bbox_inches='tight')
         self.adjust_window.present_phase_fig.savefig(os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-PHASE.pdf"), bbox_inches='tight')
         # self.adjust_window.present_phase_fig.savefig(os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-PHASE.eps"))
+        if self.delay_adjust_window is not None:
+            self.delay_adjust_window.delay_plot()
+            self.delay_adjust_window.present_delay_fig.savefig(os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY.png"), bbox_inches='tight')
+            self.delay_adjust_window.present_delay_fig.savefig(os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY.pdf"), bbox_inches='tight')
 
         self.root.destroy()
         plt.close('all')
 
     def root_normal_vector_plot(self):
+        if self.antenna.mv_result is None:
+            return
         # close present fig
         if self.present_fig is not None:
             plt.close(self.present_fig)
@@ -134,8 +144,10 @@ class RootWindow:
         if adjust:
             self.adjust_window.phase_plot()
             self.adjust_window.manual_toggle.set(False)
+            if self.delay_adjust_window is not None:
+                self.delay_adjust_window.delay_plot()
 
-    def load(self):
+    def load(self, do_rerun=True):
         with open(self.conf_dir, 'r') as f:
             config_load = yaml.safe_load(f)
             for key, value in config_load.items():
@@ -144,8 +156,17 @@ class RootWindow:
         for i, item in adjust_load.iterrows():
             self.antenna.adjust_info.loc[i] = item
         self.antenna.update_data()
+        if os.path.isfile(self.delay_adj_dir):
+            delay_adjust_load = pd.read_csv(self.delay_adj_dir)
+            for i, item in delay_adjust_load.iterrows():
+                if i < self.antenna.delay_adjust_info.index.size:
+                    self.antenna.delay_adjust_info.loc[i] = item
+            self.antenna.update_delay_data()
         if 'reverse' in config_load.keys():
             self.antenna.reverse = config_load['reverse']
         if 't_flag' in config_load.keys():
             self.antenna.t_flag_info = config_load['t_flag']
-        self.rerun(False)
+        if 'delay_t_flag' in config_load.keys():
+            self.antenna.delay_t_flag_info = config_load['delay_t_flag']
+        if do_rerun:
+            self.rerun(False)

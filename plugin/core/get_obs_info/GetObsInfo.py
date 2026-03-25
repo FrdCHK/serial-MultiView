@@ -1,4 +1,5 @@
 from AIPSData import AIPSUVData
+import numpy as np
 import pandas as pd
 from datetime import datetime
 from astropy.time import Time
@@ -46,6 +47,9 @@ class GetObsInfo(Plugin):
         no_stokes = data.header.naxis[1]  # polarization number
         no_if = data.header.naxis[3]  # IF number
         no_chan = data.header.naxis[2]  # channel number per IF
+        fq_table = data.table('AIPS FQ', 0)
+        if_freq = np.array(fq_table[0]['if_freq']) * 1e-9 + obs_freq  # frequency of each IF in GHz
+        ch_width = np.array(fq_table[0]['ch_width']) * 1e-9  # channel width of each IF in GHz
 
         fringe_finder_name = sources.loc[sources['ID'] == nx_table[0]['source_id'], 'NAME'].values[0].rstrip()
         # NOTE AIPS timerange: the data points (~2 sec each usually) in a scan are not integrated, so, cover the whole scan!
@@ -62,7 +66,9 @@ class GetObsInfo(Plugin):
                               "obs_freq": obs_freq,
                               "no_stokes": no_stokes,
                               "no_if": no_if,
+                              "if_freq": if_freq,
                               "no_chan": no_chan,
+                              "ch_width": ch_width,
                               "mpc_calsour": {"name": fringe_finder_name,
                                               "end_time": {"day": end_day,
                                                            "hour": end_hour,

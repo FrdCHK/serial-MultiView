@@ -3,18 +3,22 @@ flag window of GUI
 @Author: Jingdong Zhang
 @DATE  : 2024/8/6
 """
-# import yaml
 import tkinter as tk
 from tkinter import font
 import matplotlib.pyplot as plt
+import numpy as np
+from astropy.wcs import WCS
+from matplotlib import rc
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
 class AdjustWindow:
-    def __init__(self, root, antenna, config, target_relative_position, secondary_calibrators):
+    def __init__(self, root, antenna, config, target, primary, target_relative_position, secondary_calibrators):
         self.root = root
         self.antenna = antenna
         self.config = config
+        self.target = target
+        self.primary = primary
         self.target_relative_position = target_relative_position
         self.secondary_calibrators = secondary_calibrators
 
@@ -266,18 +270,50 @@ class AdjustWindow:
         if self.present_position_fig is not None:
             plt.close(self.present_position_fig)
 
-        fig, ax = plt.subplots(1, 1, figsize=(1.5, 1.5))
-        fig.subplots_adjust(left=0.08, right=0.98, top=0.98, bottom=0.08)
-        ax.scatter([0], [0], label="Primary", marker='*', c='k')
-        ax.scatter([self.target_relative_position[0]], [self.target_relative_position[1]],
-                   label="Target", marker='x', c='k')
+        primary_ra = float(self.primary["RA"])
+        primary_dec = float(self.primary["DEC"])
+        target_ra = float(self.target["RA"])
+        target_dec = float(self.target["DEC"])
+        cal_ra = [float(c.ra) for c in self.secondary_calibrators]
+        cal_dec = [float(c.dec) for c in self.secondary_calibrators]
+        all_x = [primary_ra, target_ra] + cal_ra
+        all_y = [primary_dec, target_dec] + cal_dec
+        x_span = float(np.ptp(all_x)) + 1e-6
+        y_span = float(np.ptp(all_y)) + 1e-6
+        ratio = np.clip(x_span / y_span, 0.25, 4.0)
+        base_size = 3.0
+        fig_width = base_size * float(np.sqrt(ratio))
+        fig_height = base_size / float(np.sqrt(ratio))
+
+        rc('xtick', direction='in')
+        rc('ytick', direction='in')
+
+        w = WCS(naxis=2)
+        w.wcs.crval = [primary_ra, primary_dec]
+        w.wcs.crpix = [500, 500]
+        w.wcs.cdelt = np.array([-0.002, 0.002])
+        w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+
+        fig, ax = plt.subplots(1, 1, figsize=(fig_width, fig_height), subplot_kw={'projection': w})
+        fig.subplots_adjust(left=0.12, right=0.98, top=0.96, bottom=0.12)
+        ax.coords.grid(True, color="gray", ls="--", alpha=0.5)
+        ax.set_xlabel("RA")
+        ax.set_ylabel("DEC")
+
+        # world coords in degrees
+        prim_x, prim_y = w.world_to_pixel_values(primary_ra, primary_dec)
+        targ_x, targ_y = w.world_to_pixel_values(target_ra, target_dec)
+
+        ax.plot(prim_x, prim_y, marker='*', markersize=8, color='k')
+        ax.text(prim_x, prim_y, self.primary.get("NAME", "PRIMARY"), ha="center", va="bottom", fontsize=8)
+        ax.plot(targ_x, targ_y, marker='^', markersize=8, color='#A52C2C')
+        ax.text(targ_x, targ_y, self.target["NAME"], ha="center", va="bottom", fontsize=8)
+
         for i, item in enumerate(self.secondary_calibrators):
-            # if not self.calibrator_toggle_var[i].get():
-            #     ax.scatter([item.dx], [item.dy], alpha=0.3)
-            # else:
-            #     ax.scatter([item.dx], [item.dy])
-            ax.scatter([item.dx], [item.dy])
-        ax.set_aspect('equal')
+            x, y = w.world_to_pixel_values(float(item.ra), float(item.dec))
+            color = self.antenna.colors[i % len(self.antenna.colors)]
+            ax.plot(x, y, marker='o', markersize=7, color=color)
+            ax.text(x, y, item.name, ha="center", va="bottom", fontsize=7, color=color)
         canvas = FigureCanvasTkAgg(fig, master=self.lower_frames[0])
         canvas.draw()
         canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew", padx=0, pady=0)

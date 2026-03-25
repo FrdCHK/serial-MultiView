@@ -105,6 +105,7 @@ class MVPostProcess(Plugin):
 
             mv_data_dir = os.path.join(mv_dir, f"{target['ID']}-{target['NAME']}-MV")
             mv_cache = {}
+            mv_delay_cache = {}
             save_dir = os.path.join(mv_dir, f"{target['ID']}-{target['NAME']}-SAVE")
             if os.path.isdir(save_dir):
                 conf = find_matching_files(save_dir, f"{target['ID']}-{target['NAME']}", "CONF", "yaml")
@@ -143,11 +144,40 @@ class MVPostProcess(Plugin):
                         sn_mv.append(row)
                         continue
                     mv_cache[an_id] = pd.read_csv(mv_path)
+                    mv_delay_path = os.path.join(mv_data_dir, f"{target['ID']}-{target['NAME']}-{an_id}-{an_name}-DELAY.csv")
+                    if os.path.isfile(mv_delay_path):
+                        mv_delay_cache[an_id] = pd.read_csv(mv_delay_path)
                 sn_f = mv_cache[an_id]
+                delay_f = mv_delay_cache.get(an_id)
+                if_freq = context.get_context().get("if_freq", None)
+                if if_freq is None:
+                    if_freq = np.array([context.get_context().get("obs_freq", 0.0) for _ in range(int(context.get_context().get("if_number", 1)))])
+                else:
+                    if_freq = np.array(if_freq)
                 for j in range(int(context.get_context().get("if_number", 1))):
                     phase0 = math.atan2(row.imag1[j], row.real1[j])
+                    phase0_corr = phase0
+                    if delay_f is not None and not delay_f.empty:
+                        delay_col = f"d{j}"
+                        if delay_col in delay_f.columns:
+                            fd = interp.interp1d(delay_f["t"], delay_f[delay_col], bounds_error=False, fill_value="extrapolate")
+                            delay_corr = float(fd(row.time))
+                        elif "mbdelay" in delay_f.columns:
+                            fd = interp.interp1d(delay_f["t"], delay_f["mbdelay"], bounds_error=False, fill_value="extrapolate")
+                            delay_corr = float(fd(row.time))
+                        else:
+                            delay_corr = 0.0
+
+                        try:
+                            corrected_delay = row.delay_1[j] + delay_corr
+                            row.delay_1[j] = corrected_delay
+                        except Exception:
+                            corrected_delay = delay_corr
+                        phase_offset = corrected_delay * if_freq[j] * 2e9 * math.pi
+                        phase0_corr = phase0 - phase_offset
+                        phase0_corr = (phase0_corr + np.pi) % (2 * np.pi) - np.pi
                     f = interp.interp1d(sn_f["t"], sn_f["phase"], bounds_error=False, fill_value="extrapolate")
-                    phase = f(row.time) + phase0
+                    phase = f(row.time) + phase0_corr
                     phase = (phase + np.pi) % (2 * np.pi) - np.pi
                     row.real1[j] = math.cos(phase)
                     row.imag1[j] = math.sin(phase)
