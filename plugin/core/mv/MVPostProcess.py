@@ -173,12 +173,12 @@ class MVPostProcess(Plugin):
                             row.delay_1[j] = corrected_delay
                         except Exception:
                             corrected_delay = delay_corr
-                        phase_offset = corrected_delay * if_freq[j] * 2e9 * math.pi
-                        phase0_corr = phase0 - phase_offset
-                        phase0_corr = (phase0_corr + np.pi) % (2 * np.pi) - np.pi
+                        phase_offset = delay_corr * if_freq[j] * 2e9 * math.pi
+                        phase0_corr = phase0 + phase_offset
+                        # phase0_corr = (phase0_corr + np.pi) % (2 * np.pi) - np.pi
                     f = interp.interp1d(sn_f["t"], sn_f["phase"], bounds_error=False, fill_value="extrapolate")
                     phase = f(row.time) + phase0_corr
-                    phase = (phase + np.pi) % (2 * np.pi) - np.pi
+                    # phase = (phase + np.pi) % (2 * np.pi) - np.pi
                     row.real1[j] = math.cos(phase)
                     row.imag1[j] = math.sin(phase)
                     row.real2[j] = math.cos(phase)
@@ -212,7 +212,7 @@ class MVPostProcess(Plugin):
                 "indisk": indisk,
                 "in_cat_ident": f"{target['NAME']} WITH CALIBRATORS",
                 "calsour": [primary["NAME"]],
-                "sources": [target["NAME"]],
+                # "sources": [target["NAME"]],
                 "opcode": "CALI",
                 "interpol": "AMBG",
                 "smotyp": "VLBI",

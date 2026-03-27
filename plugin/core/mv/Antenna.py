@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import copy
 import matplotlib.pyplot as plt
+import scipy.interpolate as interp
 
 from .plane import plane
 from .Node import Node
@@ -487,7 +488,9 @@ class Antenna:
         # phase = (phase + np.pi) % (2 * np.pi) - np.pi
         # self.original_data['phase'] = phase
 
-        phase_offset = self.delay_data["d1"] * float(if_freq) * 2e9 * np.pi
+        f = interp.interp1d(self.delay_data["t"], self.delay_data["d1"], bounds_error=False, fill_value="extrapolate")
+
+        phase_offset = f(self.original_data['t']) * float(if_freq) * 2e9 * np.pi
         phase = self.original_data['phase'].to_numpy() - phase_offset
         phase = (phase + np.pi) % (2 * np.pi) - np.pi
         self.original_data['phase'] = phase

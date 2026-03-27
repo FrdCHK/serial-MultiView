@@ -152,10 +152,10 @@ class DelayAdjustWindow:
     def on_flag(self, mode):
         if (self.timerange_start is not None) and (self.timerange_end is not None):
             self.antenna.delay_flag([self.timerange_start, self.timerange_end], self.calibrator_adjust, mode)
-            self.antenna.delay_multiview(
-                kalman_factor=self.config.get("delay_kalman_factor", 0.08),
-                smo_half_window=self.config.get("delay_smo_half_window", None),
-            )
+            # self.antenna.delay_multiview(
+            #     kalman_factor=self.config.get("delay_kalman_factor", 0.08),
+            #     smo_half_window=self.config.get("delay_smo_half_window", None),
+            # )
             self.delay_plot()
 
     def on_reset(self):
