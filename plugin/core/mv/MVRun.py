@@ -71,7 +71,7 @@ class MVRun(Plugin):
 
             calibrator_table = pd.DataFrame.from_dict(target["CALIBRATORS"])
             secondary_calibrators = []
-            if_number = int(context.get_context().get("if_number", 1))
+            if_number = int(context.get_context().get("no_if", 1))
             if_column = [f"p{if_id}" for if_id in range(if_number)]
             sn_all = pd.DataFrame(columns=["t", "antenna", "calsour"] + if_column)
 

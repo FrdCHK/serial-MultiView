@@ -144,7 +144,7 @@ class MVPostProcess(Plugin):
                         continue
                     mv_cache[an_id] = pd.read_csv(mv_path)
                 sn_f = mv_cache[an_id]
-                for j in range(int(context.get_context().get("if_number", 1))):
+                for j in range(int(context.get_context().get("no_if", 1))):
                     phase0 = math.atan2(row.imag1[j], row.real1[j])
                     f = interp.interp1d(sn_f["t"], sn_f["phase"], bounds_error=False, fill_value="extrapolate")
                     phase = f(row.time) + phase0
