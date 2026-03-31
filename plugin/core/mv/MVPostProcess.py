@@ -151,10 +151,10 @@ class MVPostProcess(Plugin):
                 delay_f = mv_delay_cache.get(an_id)
                 if_freq = context.get_context().get("if_freq", None)
                 if if_freq is None:
-                    if_freq = np.array([context.get_context().get("obs_freq", 0.0) for _ in range(int(context.get_context().get("if_number", 1)))])
+                    if_freq = np.array([context.get_context().get("obs_freq", 0.0) for _ in range(int(context.get_context().get("no_if", 1)))])
                 else:
                     if_freq = np.array(if_freq)
-                for j in range(int(context.get_context().get("if_number", 1))):
+                for j in range(int(context.get_context().get("no_if", 1))):
                     phase0 = math.atan2(row.imag1[j], row.real1[j])
                     phase0_corr = phase0
                     if delay_f is not None and not delay_f.empty:
