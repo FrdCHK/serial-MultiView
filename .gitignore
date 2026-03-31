@@ -8,3 +8,5 @@ pytest.ini
 *.log
 *.log_*
 !log/.gitkeep
+.codex
+codex.md

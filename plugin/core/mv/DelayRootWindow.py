@@ -11,6 +11,7 @@ from tkinter import font
 import matplotlib.pyplot as plt
 import yaml
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from util.yaml_util import safe_dump_builtin
 
 
 class DelayRootWindow:
@@ -103,7 +104,7 @@ class DelayRootWindow:
         if isinstance(self.config.get("if_freq"), np.ndarray):
             self.config["if_freq"] = self.config["if_freq"].tolist()
         with open(self.delay_conf_dir, 'w') as f:
-            yaml.safe_dump(self.config, f)
+            safe_dump_builtin(self.config, f)
         if self.present_fig is not None:
             self.present_fig.savefig(os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY-VECTOR.png"), bbox_inches='tight')
             self.present_fig.savefig(os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY-VECTOR.pdf"), bbox_inches='tight')

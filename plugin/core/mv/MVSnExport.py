@@ -12,6 +12,7 @@ from AIPSData import AIPSUVData
 
 from core.Plugin import Plugin
 from core.Context import Context
+from util.yaml_util import safe_dump_builtin
 
 
 class MVSnExport(Plugin):
@@ -102,7 +103,7 @@ class MVSnExport(Plugin):
             }
             target_conf_path = os.path.join(mv_dir, f"{target['ID']}-{target['NAME']}.yaml")
             with open(target_conf_path, "w", encoding="utf-8") as f:
-                yaml.safe_dump(target_conf, f)
+                safe_dump_builtin(target_conf, f)
 
         context.logger.info("MultiView SN export finished")
         return True

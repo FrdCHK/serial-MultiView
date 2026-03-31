@@ -1,6 +1,7 @@
 import os
 import copy
 import yaml
+import numpy as np
 import pandas as pd
 
 from .Calibrator import Calibrator
@@ -12,6 +13,7 @@ from core.Context import Context
 from util.integer_input import integer_input
 from util.relative_position import relative_position
 from util.find_matching_files import find_matching_files
+from util.yaml_util import safe_dump_builtin
 from util.yes_no_input import yes_no_input
 
 
@@ -30,13 +32,16 @@ class MVRun(Plugin):
             return False
 
         base_config = copy.deepcopy(context.get_context()["config"])
-        base_config["if_freq"] = context.get_context().get("if_freq")
-        base_config["obs_freq"] = context.get_context().get("obs_freq")
-        for key in ["max_depth", "max_ang_v", "min_z", "weight", "kalman_factor", "smo_half_window", "delay_smo_half_window"]:
+        if_freq = context.get_context().get("if_freq")
+        if if_freq is None:
+            if_freq = [context.get_context().get("obs_freq", 0.0) for _ in range(int(context.get_context().get("no_if", 1)))]
+        base_config["if_freq"] = list(if_freq)
+        for key in ["max_depth", "max_ang_v", "min_z", "weight", "kalman_factor", "smo_half_window"]:
             if key in self.params:
                 base_config[key] = self.params[key]
 
         workspace_dir = base_config.get("workspace", ".")
+        no_if = int(context.get_context().get("no_if", 1))
 
         for target in context.get_context().get("targets"):
             primary = target.get("primary_calibrator") or target.get("PRIMARY_CALIBRATOR")
@@ -45,8 +50,8 @@ class MVRun(Plugin):
                 return False
             if isinstance(primary, list):
                 primary = primary[0]
-            primary_ra = float(primary["RA"]) if isinstance(primary, dict) else float(primary[0]["RA"])
-            primary_dec = float(primary["DEC"]) if isinstance(primary, dict) else float(primary[0]["DEC"])
+            primary_ra = float(primary["RA"])
+            primary_dec = float(primary["DEC"])
 
             target_dir = os.path.join(workspace_dir, "targets", target["NAME"])
             mv_dir = os.path.join(target_dir, "mv")
@@ -73,10 +78,8 @@ class MVRun(Plugin):
 
             calibrator_table = pd.DataFrame.from_dict(target["CALIBRATORS"])
             secondary_calibrators = []
-            if_number = int(context.get_context().get("no_if", 1))
-            if_column = [f"p{if_id}" for if_id in range(if_number)]
-            sn_all = pd.DataFrame(columns=["t", "antenna", "calsour"] + if_column)
-            delay_columns = [f"d{if_id}" for if_id in range(if_number)]
+            sn_all = pd.DataFrame(columns=["t", "antenna", "calsour", "p0"])
+            delay_columns = [f"d{if_id}" for if_id in range(no_if)]
             sn_all_delay = pd.DataFrame(columns=["t", "antenna", "calsour"] + delay_columns)
 
             for _, row in calibrator_table.iterrows():
@@ -90,21 +93,30 @@ class MVRun(Plugin):
                     context.logger.error(f"SN file not found: {sn_path}")
                     return False
                 sn_table = pd.read_csv(sn_path)
-                sn_table = sn_table.loc[sn_table["p0"] != 0]
+                sn_table = sn_table.loc[sn_table["p0"] != 0].copy(deep=True)
+                total_delay = pd.DataFrame({
+                    "t": sn_table["t"],
+                    "antenna": sn_table["antenna"],
+                    "calsour": sn_table["calsour"],
+                })
+                for if_id in range(no_if):
+                    freq_hz = float(if_freq[if_id]) * 1e9
+                    total_delay[f"d{if_id}"] = sn_table["mbdelay"] - sn_table[f"p{if_id}"] / (2 * np.pi * freq_hz)
+
                 calibrator = Calibrator(int(row["ID"]), row["NAME"], row["RA"], row["DEC"], int(row["SN"]), sn_table)
                 calibrator.calc_relative_position(primary_ra, primary_dec)
                 secondary_calibrators.append(calibrator)
-                sn_all = pd.concat([sn_all, sn_table], ignore_index=True)
-                if all(col in sn_table.columns for col in delay_columns):
-                    sn_all_delay = pd.concat([sn_all_delay, sn_table[["t", "antenna", "calsour"] + delay_columns]], ignore_index=True)
+                sn_all = pd.concat([sn_all, sn_table[["t", "antenna", "calsour", "p0"]]], ignore_index=True)
+                sn_all_delay = pd.concat([sn_all_delay, total_delay], ignore_index=True)
 
             sn_all["antenna"] = sn_all["antenna"].astype(int)
             sn_all["calsour"] = sn_all["calsour"].astype(int)
+            sn_all_delay["antenna"] = sn_all_delay["antenna"].astype(int)
+            sn_all_delay["calsour"] = sn_all_delay["calsour"].astype(int)
 
             for calibrator in secondary_calibrators:
                 sn_all.loc[sn_all["calsour"] == calibrator.id, ["x", "y"]] = [calibrator.dx, calibrator.dy]
-                if not sn_all_delay.empty:
-                    sn_all_delay.loc[sn_all_delay["calsour"] == calibrator.id, ["x", "y"]] = [calibrator.dx, calibrator.dy]
+                sn_all_delay.loc[sn_all_delay["calsour"] == calibrator.id, ["x", "y"]] = [calibrator.dx, calibrator.dy]
 
             antenna_table = pd.DataFrame.from_dict(context.get_context().get("antennas", []))
             refant_id = int(context.get_context().get("ref_ant", {}).get("ID", -1))
@@ -117,18 +129,15 @@ class MVRun(Plugin):
                 if sn_antenna.shape[0] <= 10:
                     antennas_exclude.loc[antennas_exclude.index.size] = [row["ID"], row["NAME"]]
                     continue
-                sn_if0 = sn_antenna[["calsour", "x", "y", "t"]].copy(deep=True)
-                sn_if0["phase"] = sn_antenna["p0"]
-                sn_if0.sort_values(by="t", inplace=True, ascending=True)
-                sn_if0.reset_index(drop=True, inplace=True)
-                delay_data = None
-                if not sn_all_delay.empty:
-                    sn_delay_antenna = sn_all_delay.loc[sn_all_delay["antenna"] == int(row["ID"])]
-                    sn_delay = sn_delay_antenna[["calsour", "x", "y", "t"] + delay_columns].copy(deep=True)
-                    sn_delay.sort_values(by="t", inplace=True, ascending=True)
-                    sn_delay.reset_index(drop=True, inplace=True)
-                    delay_data = sn_delay
-                antenna = Antenna(int(row["ID"]), row["NAME"], sn_if0, secondary_calibrators, delay_data)
+                phase_stub = sn_antenna[["calsour", "x", "y", "t"]].copy(deep=True)
+                phase_stub["phase"] = sn_antenna["p0"]
+                phase_stub.sort_values(by="t", inplace=True, ascending=True)
+                phase_stub.reset_index(drop=True, inplace=True)
+                sn_delay_antenna = sn_all_delay.loc[sn_all_delay["antenna"] == int(row["ID"])]
+                sn_delay = sn_delay_antenna[["calsour", "x", "y", "t"] + delay_columns].copy(deep=True)
+                sn_delay.sort_values(by="t", inplace=True, ascending=True)
+                sn_delay.reset_index(drop=True, inplace=True)
+                antenna = Antenna(int(row["ID"]), row["NAME"], phase_stub, secondary_calibrators, sn_delay, if_freq)
                 antennas.append(antenna)
 
             target_relative_position = relative_position([primary_ra, primary_dec], [target["RA"], target["DEC"]])
@@ -161,7 +170,8 @@ class MVRun(Plugin):
                     if user_input in antenna_ids:
                         antenna_index = antenna_ids.index(user_input)
                         Gui({"ID": target["ID"], "NAME": target["NAME"], "RA": target["RA"], "DEC": target["DEC"]},
-                            primary, antennas[antenna_index], mv_config, target_relative_position, secondary_calibrators, antennas[antenna_index].id in conf_ids)
+                            primary, antennas[antenna_index], mv_config, target_relative_position, secondary_calibrators,
+                            antennas[antenna_index].id in conf_ids)
                     elif user_input == 99:
                         break
                     else:
@@ -173,7 +183,7 @@ class MVRun(Plugin):
             target_conf["CALIBRATORS"] = target["CALIBRATORS"]
             os.makedirs(mv_dir, exist_ok=True)
             with open(target_conf_path, "w", encoding="utf-8") as f:
-                yaml.safe_dump(target_conf, f)
+                safe_dump_builtin(target_conf, f)
 
         context.logger.info("MultiView GUI run finished")
         return True

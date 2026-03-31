@@ -41,7 +41,6 @@ class AdjustWindow:
         frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
         self.frames.append(frame)
 
-        # upper frame
         self.frames[0].grid_columnconfigure(0, weight=1)
         self.frames[0].grid_rowconfigure(0, weight=1)
 
@@ -52,41 +51,39 @@ class AdjustWindow:
         self.timerange_start = None
         self.timerange_end = None
         self.fill = None
-        self.phase_plot()
 
-        # lower frame
         self.frames[1].grid_rowconfigure(0, weight=1)
         self.frames[1].grid_columnconfigure(0, weight=12)
         self.frames[1].grid_columnconfigure(1, weight=10)
         self.frames[1].grid_columnconfigure(2, weight=10)
 
         self.lower_frames = []
-        frame = tk.Frame(self.frames[1])
-        frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-        self.lower_frames.append(frame)
-        frame = tk.Frame(self.frames[1])
-        frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
-        self.lower_frames.append(frame)
-        frame = tk.Frame(self.frames[1])
-        frame.grid(row=0, column=2, sticky="nsew", padx=5, pady=5)
-        self.lower_frames.append(frame)
+        for col in range(3):
+            frame = tk.Frame(self.frames[1])
+            frame.grid(row=0, column=col, sticky="nsew", padx=5, pady=5)
+            self.lower_frames.append(frame)
 
-        # manual adjustment toggle
         self.manual_toggle = tk.BooleanVar(value=False)
         manual_toggle = tk.Checkbutton(self.lower_frames[1], text="manual adjustment", font=self.font,
                                        variable=self.manual_toggle, command=self.on_manual_toggle)
         manual_toggle.pack(padx=5, pady=5)
 
-        # reverse toggle
-        if self.antenna.reverse:
-            self.reverse_toggle = tk.BooleanVar(value=True)
-        else:
-            self.reverse_toggle = tk.BooleanVar(value=False)
+        self.reverse_toggle = tk.BooleanVar(value=bool(self.antenna.reverse))
         reverse_toggle = tk.Checkbutton(self.lower_frames[1], text="reverse", font=self.font,
-                                       variable=self.reverse_toggle, command=self.on_reverse_toggle)
+                                        variable=self.reverse_toggle, command=self.on_reverse_toggle)
         reverse_toggle.pack(padx=5, pady=5)
 
-        # calibrator select
+        label_if = tk.Label(self.lower_frames[1], text="-- IF selection --", width=36, font=self.font, anchor="center")
+        label_if.pack(padx=5, pady=5)
+        self.if_options = [f"IF{if_id + 1}" for if_id in self.antenna.delay_if_ids] or ["IF1"]
+        self.if_map = {label: if_id for label, if_id in zip(self.if_options, self.antenna.delay_if_ids)}
+        if not self.if_map:
+            self.if_map = {"IF1": 0}
+        self.if_var = tk.StringVar(value=self.if_options[0])
+        if_menu = tk.OptionMenu(self.lower_frames[1], self.if_var, *self.if_options, command=lambda _: self.on_if_change())
+        if_menu.config(font=self.font)
+        if_menu.pack(padx=5, pady=5)
+
         label_info = tk.Label(self.lower_frames[1], text="-- secondary calibrator selection --",
                               width=36, font=self.font, anchor="center")
         label_info.pack(padx=5, pady=5)
@@ -98,19 +95,15 @@ class AdjustWindow:
                                                command=lambda j=i: self.on_calibrator_toggle(j))
             calibrator_toggle.pack(padx=5, pady=5)
 
-        # position plot
         self.lower_frames[0].grid_columnconfigure(0, weight=1)
         self.lower_frames[0].grid_rowconfigure(0, weight=1)
         self.present_position_fig = None
         self.position_plot()
 
-        # button frame
         self.lower_frames[2].grid_columnconfigure(0, weight=1)
         self.lower_frames[2].grid_columnconfigure(1, weight=1)
-        self.lower_frames[2].grid_rowconfigure(0, weight=1)
-        self.lower_frames[2].grid_rowconfigure(1, weight=1)
-        self.lower_frames[2].grid_rowconfigure(2, weight=1)
-        self.lower_frames[2].grid_rowconfigure(3, weight=1)
+        for row in range(4):
+            self.lower_frames[2].grid_rowconfigure(row, weight=1)
 
         plus_button = tk.Button(self.lower_frames[2], height=2, width=10, text="+2pi", font=self.font,
                                 command=lambda: self.on_wrap('+'))
@@ -122,17 +115,22 @@ class AdjustWindow:
                                 command=lambda: self.on_flag('flag'))
         flag_button.grid(row=1, column=0, padx=5, pady=5)
         unflag_button = tk.Button(self.lower_frames[2], height=2, width=10, text="unflag", font=self.font,
-                                command=lambda: self.on_flag('unflag'))
+                                  command=lambda: self.on_flag('unflag'))
         unflag_button.grid(row=1, column=1, padx=5, pady=5)
         t_flag_button = tk.Button(self.lower_frames[2], height=2, width=10, text="T flag", font=self.font,
-                                command=lambda: self.on_t_flag('flag'))
+                                  command=lambda: self.on_t_flag('flag'))
         t_flag_button.grid(row=2, column=0, padx=5, pady=5)
         t_unflag_button = tk.Button(self.lower_frames[2], height=2, width=10, text="T unflag", font=self.font,
-                                command=lambda: self.on_t_flag('unflag'))
+                                    command=lambda: self.on_t_flag('unflag'))
         t_unflag_button.grid(row=2, column=1, padx=5, pady=5)
         reset_button = tk.Button(self.lower_frames[2], height=2, width=10, text="reset", font=self.font,
                                  command=self.on_reset)
         reset_button.grid(row=3, column=0, columnspan=2, padx=5, pady=5)
+
+        self.phase_plot()
+
+    def get_selected_if_id(self):
+        return self.if_map.get(self.if_var.get(), self.antenna.delay_if_ids[0] if self.antenna.delay_if_ids else 0)
 
     def on_manual_toggle(self):
         if self.manual_toggle.get():
@@ -143,10 +141,14 @@ class AdjustWindow:
     def on_reverse_toggle(self):
         self.antenna.reverse = self.reverse_toggle.get()
 
+    def on_if_change(self):
+        if self.manual_toggle.get():
+            self.phase_plot_for_adjust()
+        else:
+            self.phase_plot()
+        self.root.root_normal_vector_plot()
+
     def on_calibrator_toggle(self, num):
-        """
-        :param num: index of the calibrator to be toggled. Note: this is not its AIPS source ID!
-        """
         if self.calibrator_toggle_var[num].get():
             if self.secondary_calibrators[num].id not in self.calibrator_adjust:
                 self.calibrator_adjust.append(self.secondary_calibrators[num].id)
@@ -155,13 +157,8 @@ class AdjustWindow:
                 self.calibrator_adjust.remove(self.secondary_calibrators[num].id)
 
     def on_click(self, event):
-        """
-        left click to mark start time, right click to mark end time.
-        :param event: the click event
-        """
         if event.inaxes is not None:
             x = float(event.xdata)
-
             if event.button == 1:
                 if self.red_line and x >= self.red_line.get_xdata()[0]:
                     return
@@ -181,7 +178,6 @@ class AdjustWindow:
                 self.red_line = self.present_phase_fig.axes[0].axvline(x=x, color='r', linestyle='-')
                 self.timerange_end = x
 
-            # fill the area between two lines
             if self.green_line and self.red_line:
                 if self.fill:
                     self.fill.remove()
@@ -189,42 +185,31 @@ class AdjustWindow:
                 self.fill = self.present_phase_fig.axes[0].fill_betweenx(y_lim, self.timerange_start,
                                                                          self.timerange_end, color='gray', alpha=0.15)
                 self.present_phase_fig.axes[0].set_ylim(y_lim)
-
             self.present_phase_canvas.draw()
 
     def on_wrap(self, mode):
-        """
-        See Antenna.wrap()
-        :param mode: + / -
-        """
         if self.manual_toggle.get() and (self.timerange_start is not None) and (self.timerange_end is not None):
-            self.antenna.wrap([self.timerange_start, self.timerange_end], self.calibrator_adjust, mode)
+            self.antenna.delay_wrap([self.timerange_start, self.timerange_end], self.calibrator_adjust, self.get_selected_if_id(), mode)
             self.phase_plot_for_adjust()
+            self.root.rerun(False)
 
     def on_flag(self, mode):
-        """
-        See Antenna.flag()
-        :param mode: flag / reset
-        """
         if self.manual_toggle.get() and (self.timerange_start is not None) and (self.timerange_end is not None):
-            self.antenna.flag([self.timerange_start, self.timerange_end], self.calibrator_adjust, mode)
+            self.antenna.delay_flag([self.timerange_start, self.timerange_end], self.calibrator_adjust, mode)
             self.phase_plot_for_adjust()
+            self.root.rerun(False)
 
     def on_t_flag(self, mode):
-        """
-        See Antenna.flag()
-        :param mode: flag / unflag
-        """
         if self.manual_toggle.get() and (self.timerange_start is not None) and (self.timerange_end is not None):
-            self.antenna.t_flag([self.timerange_start, self.timerange_end], mode)
+            self.antenna.delay_t_flag([self.timerange_start, self.timerange_end], mode)
             self.phase_plot_for_adjust()
 
     def on_reset(self):
         if self.manual_toggle.get():
-            self.antenna.reset(self.root)
+            self.antenna.delay_reset()
+            self.root.rerun()
 
     def phase_plot(self):
-        # close present fig
         if self.green_line is not None:
             self.green_line.remove()
             self.green_line = None
@@ -236,15 +221,14 @@ class AdjustWindow:
         if self.present_phase_fig is not None:
             plt.close(self.present_phase_fig)
 
-        fig = self.antenna.plot_phase(self.target_relative_position)
+        fig = self.antenna.plot_delay(self.target_relative_position, self.get_selected_if_id(), adjusted=False)
         canvas = FigureCanvasTkAgg(fig, master=self.frames[0])
         canvas.draw()
         canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-
         self.present_phase_fig = fig
+        self.present_phase_canvas = canvas
 
     def phase_plot_for_adjust(self):
-        # close present fig
         if self.green_line is not None:
             self.green_line.remove()
             self.green_line = None
@@ -256,17 +240,15 @@ class AdjustWindow:
         if self.present_phase_fig is not None:
             plt.close(self.present_phase_fig)
 
-        fig = self.antenna.plot_phase(self.target_relative_position, False)
+        fig = self.antenna.plot_delay(self.target_relative_position, self.get_selected_if_id(), adjusted=True)
         canvas = FigureCanvasTkAgg(fig, master=self.frames[0])
         canvas.draw()
         canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
         canvas.mpl_connect("button_press_event", self.on_click)
-
         self.present_phase_fig = fig
         self.present_phase_canvas = canvas
 
     def position_plot(self):
-        # close present fig
         if self.present_position_fig is not None:
             plt.close(self.present_position_fig)
 
@@ -300,7 +282,6 @@ class AdjustWindow:
         ax.set_xlabel("RA")
         ax.set_ylabel("DEC")
 
-        # world coords in degrees
         prim_x, prim_y = w.world_to_pixel_values(primary_ra, primary_dec)
         targ_x, targ_y = w.world_to_pixel_values(target_ra, target_dec)
 
@@ -317,11 +298,9 @@ class AdjustWindow:
         canvas = FigureCanvasTkAgg(fig, master=self.lower_frames[0])
         canvas.draw()
         canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
-
         self.present_position_fig = fig
 
     def save(self, adj_dir, mv_dir):
         self.config['reverse'] = self.antenna.reverse
-        # print(self.antenna.t_flag_info)
-        self.config['t_flag'] = self.antenna.t_flag_info
-        self.antenna.save(adj_dir, mv_dir)
+        self.config['t_flag'] = self.antenna.delay_t_flag_info
+        self.antenna.save_delay(adj_dir, mv_dir)

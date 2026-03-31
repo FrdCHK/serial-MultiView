@@ -17,7 +17,7 @@ from .rodrigues_rotation import rodrigues_rotation
 
 
 class Antenna:
-    def __init__(self, antenna_id, antenna_name, data, calibrators, delay_data=None):
+    def __init__(self, antenna_id, antenna_name, data, calibrators, delay_data=None, if_freq=None):
         """
         antenna class for MultiView
         :param antenna_id: antenna id
@@ -47,19 +47,49 @@ class Antenna:
 
         self.reverse = False
 
-        # Delay interpolation branch (mbdelay), independent from phase adjustment.
+        # Delay branch for the one-step total-delay solution.
         if delay_data is None:
             delay_data = pd.DataFrame(columns=['calsour', 'x', 'y', 't'])
         self.original_delay_data = delay_data.copy(deep=True)
         self.original_delay_data.reset_index(drop=True, inplace=True)
+        self.delay_if_ids = sorted(
+            int(col[1:]) for col in self.original_delay_data.columns
+            if col.startswith('d') and col[1:].isdigit()
+        )
+        self.if_freq = self._normalize_if_freq(if_freq, self.delay_if_ids)
         self.delay_data = self.original_delay_data.copy(deep=True)
-        self.delay_adjust_info = pd.DataFrame(data=np.zeros(shape=(self.original_delay_data.index.size, 1)),
-                                              columns=['flag']).astype({'flag': int})
+        delay_adjust_columns = ['flag'] + [f'w{if_id}' for if_id in self.delay_if_ids]
+        self.delay_adjust_info = pd.DataFrame(
+            data=np.zeros(shape=(self.original_delay_data.index.size, len(delay_adjust_columns))),
+            columns=delay_adjust_columns,
+        )
+        dtype_map = {'flag': int}
+        dtype_map.update({f'w{if_id}': int for if_id in self.delay_if_ids})
+        self.delay_adjust_info = self.delay_adjust_info.astype(dtype_map)
         self.delay_t_flag_info = []
         self.delay_mv_result = None
         self.delay_mv_t = None
-        self.delay_if_ids = []
-        self.delay_scale = 1.0
+        self.delay_scale = {}
+        self.delay_target_if = {}
+        self.delay_average = np.array([])
+        self.delay_average_t = np.array([])
+
+    @staticmethod
+    def _normalize_if_freq(if_freq, delay_if_ids):
+        if if_freq is None:
+            return {if_id: 1.0 for if_id in delay_if_ids}
+        if np.isscalar(if_freq):
+            return {if_id: float(if_freq) for if_id in delay_if_ids}
+        freq_list = list(if_freq)
+        out = {}
+        for if_id in delay_if_ids:
+            if if_id < len(freq_list):
+                out[if_id] = float(freq_list[if_id])
+            elif freq_list:
+                out[if_id] = float(freq_list[-1])
+            else:
+                out[if_id] = 1.0
+        return out
 
     def multiview(self, max_depth=4, max_ang_v=864., min_z=0.67, weight=1., kalman_factor=None, smo_half_window=None):
         """
@@ -266,44 +296,43 @@ class Antenna:
 
     def delay_multiview(self, max_depth=4, max_ang_v=864., min_z=0.67, weight=1., kalman_factor=0.08, smo_half_window=None):
         """
-        Delay interpolation without phase ambiguity handling.
-        :param max_depth: max depth of recursion, defaults to 4
-        :param max_ang_v: max angular velocity of plane rotation, controls the threshold for pruning, defaults to 864.
-        :param min_z: minimum z value of normal vector, defaults to 0.67
-        :param weight: weight of the total rotation angle in recursion, defaults to 1.
-        :param kalman_factor: Kalman filter process noise that controls smooth effect and filter delay, defaults to 0.08.
-        :param smo_half_window: half width of moving smoothing window, defaults to None
+        Solve total delay per IF independently, then average the solved target delay.
         """
         if self.original_delay_data.empty:
-            self.delay_mv_result = np.array([])
+            self.delay_mv_result = {}
             self.delay_mv_t = np.array([])
+            self.delay_target_if = {}
+            self.delay_average = np.array([])
+            self.delay_average_t = np.array([])
             return
         self.update_delay_data()
-        if self.delay_data.empty:
-            self.delay_mv_result = np.array([])
+        if self.delay_data.empty or not self.delay_if_ids:
+            self.delay_mv_result = {}
             self.delay_mv_t = np.array([])
-            return
-
-        self.delay_if_ids = [int(col[1:]) for col in self.delay_data.columns if col.startswith('d')]
-        if not self.delay_if_ids:
-            self.delay_mv_result = np.array([])
-            self.delay_mv_t = np.array([])
+            self.delay_target_if = {}
+            self.delay_average = np.array([])
+            self.delay_average_t = np.array([])
             return
 
         extend_length = 10
         data_extended = self._get_extended_delay_data(extend_length)
-        self.delay_scale = 1e9
-        for if_id in self.delay_if_ids:
-            col = f"d{if_id}"
-            if col in data_extended.columns:
-                data_extended[col] = data_extended[col] * self.delay_scale
         delay_results = {}
+        delay_target_if = {}
         for if_id in self.delay_if_ids:
             col = f"d{if_id}"
+            if col not in data_extended.columns:
+                continue
+            freq_ghz = self.if_freq.get(if_id, 1.0)
+            scale = 2 * np.pi * float(freq_ghz) * 1e9
+            self.delay_scale[if_id] = scale
+            # Minus sign preserves the original +2pi / -2pi semantics in delay space.
+            data_view = data_extended[['calsour', 'x', 'y', 't', col]].copy(deep=True)
+            data_view['phase'] = -data_view[col] * scale
+
             norm_vec = np.array([[0], [0], [1]])
             result = []
             root_node = Node({'prune': False, 'position': -1, 'action': 0, 'angle': 0, 'total': 0, 'norm': np.zeros((3, 1))})
-            calsour = data_extended['calsour'].unique()
+            calsour = data_view['calsour'].unique()
             accu = {sour: 0. for sour in calsour}
             z_lim = min_z
             ang_v = max_ang_v
@@ -314,22 +343,24 @@ class Antenna:
             R = np.eye(n) * 0.1
             x_hat = np.zeros((n, 1))
             P = np.eye(n)
-            for i in range(data_extended.index.size):
-                data_view = data_extended.rename(columns={col: "phase"})
+            for i in range(data_view.index.size):
+                calsour_this = data_view.loc[i, 'calsour']
                 root_node.current = recursion(data_view, i, max_depth, norm_vec, accu, 0, ang_v, root_node, z_lim)
+                root_node.plus = recursion(data_view, i, max_depth, norm_vec, accu, 1, ang_v, root_node, z_lim)
+                root_node.minus = recursion(data_view, i, max_depth, norm_vec, accu, -1, ang_v, root_node, z_lim)
                 norm_series = None
                 if i > 5:
                     norm_series = np.zeros((i, 4))
-                    norm_series[:, 0] = data_extended.loc[:i - 1, 't']
+                    norm_series[:, 0] = data_view.loc[:i - 1, 't']
                     norm_series[:, 1:] = np.array(result)
                     norm_series = norm_series[-6:, :]
-                min_node, min_path = find_min_leaf(norm_series, data_extended['t'], i, root_node, norm_vec, weight, (max_depth, max_ang_v, min_z))
+                min_node, min_path = find_min_leaf(norm_series, data_view['t'], i, root_node, norm_vec, weight, (max_depth, max_ang_v, min_z))
                 if min_node is None:
                     result.append(norm_vec.flatten())
                     root_node = Node({'prune': False, 'position': i, 'action': 0, 'angle': 0, 'total': 0, 'norm': norm_vec})
                     continue
                 selected_next = min_path[1]
-                # Kalman filter for bias
+                accu[calsour_this] += selected_next['action'] * 2 * np.pi
                 x_hat = A @ x_hat
                 P = A @ P @ A.T + Q
                 K = P @ H.T @ np.linalg.inv(H @ P @ H.T + R)
@@ -340,16 +371,22 @@ class Antenna:
                 root_node = Node(selected_next)
                 root_node.data['norm'] = new_norm
                 norm_vec = new_norm
-            delay_results[if_id] = np.array(result[extend_length:])
+
+            mv_res = np.array(result[extend_length:])
+            delay_results[if_id] = mv_res
+            delay_target_if[if_id] = np.array([])
 
         self.delay_mv_result = delay_results
         if self.reverse and self.delay_data.index.size > 0:
             self.delay_mv_t = -(np.array(data_extended['t'])[extend_length:] - 2 * self.delay_data['t'].iloc[-1])
         else:
             self.delay_mv_t = np.array(data_extended['t'])[extend_length:]
+        self.delay_target_if = delay_target_if
 
         if smo_half_window is not None and smo_half_window > 0:
             self._lowpass_filter_delay(smo_half_window)
+
+        self._refresh_delay_target_series()
 
     def delay_flag(self, timerange, calibrators, mode='flag'):
         flag_index = (self.original_delay_data['t'] >= timerange[0]) & (self.original_delay_data['t'] <= timerange[1])
@@ -361,6 +398,21 @@ class Antenna:
             self.delay_adjust_info.loc[criteria_index, 'flag'] = 0
         else:
             raise ValueError('available modes are: flag, unflag')
+        self.update_delay_data()
+
+    def delay_wrap(self, timerange, calibrators, if_id, mode='+'):
+        wrap_col = f'w{if_id}'
+        if wrap_col not in self.delay_adjust_info.columns:
+            return
+        wrap_index = (self.original_delay_data['t'] >= timerange[0]) & (self.original_delay_data['t'] <= timerange[1])
+        calibrator_index = self.original_delay_data['calsour'].isin(calibrators)
+        criteria_index = wrap_index & calibrator_index
+        if mode == '+':
+            self.delay_adjust_info.loc[criteria_index, wrap_col] += 1
+        elif mode == '-':
+            self.delay_adjust_info.loc[criteria_index, wrap_col] -= 1
+        else:
+            raise ValueError('available modes are: +, -')
         self.update_delay_data()
 
     def delay_t_flag(self, timerange, mode='flag'):
@@ -425,28 +477,26 @@ class Antenna:
         self.delay_t_flag_info = []
         self.update_delay_data()
 
-    def plot_delay(self, target_pos, if_id=0):
+    def plot_delay(self, target_pos, if_id=0, adjusted=False):
         self.target_pos = target_pos
+        self._refresh_delay_target_series()
         markers = ['o', 'd', '^', 's', 'v', 'p', '*', '8', '<', '>']
         fig, ax = plt.subplots(1, 1, figsize=(8, 3))
         fig.subplots_adjust(left=0.06, right=0.99, top=0.98, bottom=0.1)
 
-        if isinstance(self.delay_mv_result, dict) and if_id in self.delay_mv_result:
-            mv_target_delay = []
-            for i in range(self.delay_mv_result[if_id].shape[0]):
-                mv_target_delay.append(plane(*self.delay_mv_result[if_id][i], *self.target_pos))
-            mv_target_delay = np.array(mv_target_delay) / self.delay_scale
-            ax.plot(self.delay_mv_t, mv_target_delay, 'x', color='k', ls='', label='Target')
+        if if_id in self.delay_target_if and self.delay_target_if[if_id].size > 0:
+            ax.plot(self.delay_mv_t, self.delay_target_if[if_id] * 1e12, 'x', color='k', ls='', label='Target')
 
         for i, item in enumerate(self.secondary_calibrators):
-            plot_data = self.original_delay_data.copy(deep=True)
-            non_flagged_index = self.delay_adjust_info['flag'] == 0
-            plot_data = plot_data.loc[non_flagged_index]
+            plot_data = self.delay_data.copy(deep=True) if adjusted else self.original_delay_data.copy(deep=True)
+            if not adjusted:
+                non_flagged_index = self.delay_adjust_info['flag'] == 0
+                plot_data = plot_data.loc[non_flagged_index]
             plot_data = plot_data.loc[plot_data['calsour'] == item.id]
             if not plot_data.empty:
                 col = f"d{if_id}"
                 if col in plot_data.columns:
-                    ax.plot(plot_data['t'], plot_data[col], ls='none', marker=markers[i], label=item.name)
+                    ax.plot(plot_data['t'], plot_data[col] * 1e12, ls='none', marker=markers[i], label=item.name)
 
         flagged_index = self.delay_adjust_info['flag'] == 1
         flagged_data = self.original_delay_data.loc[flagged_index].copy(deep=True)
@@ -456,46 +506,17 @@ class Antenna:
             if not plot_data.empty:
                 col = f"d{if_id}"
                 if col in plot_data.columns:
-                    ax.plot(plot_data['t'], plot_data[col], ls='none', marker=markers[i], c=self.colors[i], alpha=0.3)
+                    ax.plot(plot_data['t'], plot_data[col] * 1e12, ls='none', marker=markers[i], c=self.colors[i], alpha=0.3)
 
         ax.set_xlabel("time (day)")
-        ax.set_ylabel("delay (s)")
+        ax.set_ylabel("total delay (ps)")
+        ax.set_title(f"IF{if_id + 1}")
         for item in self.delay_t_flag_info:
             y_lim = ax.get_ylim()
             ax.fill_betweenx(y_lim, item[0], item[1], color='#FFB6C1', alpha=0.15)
             ax.set_ylim(y_lim)
         ax.legend()
         return fig
-
-    def apply_delay_phase_correction(self, target_pos, if_freq, if_id=0):
-        # if not isinstance(self.delay_mv_result, dict):
-        #     return
-        # if if_id not in self.delay_mv_result:
-        #     return
-        # if self.delay_mv_t is None or len(self.delay_mv_t) == 0:
-        #     return
-        # mv_target_delay = []
-        # for i in range(self.delay_mv_result[if_id].shape[0]):
-        #     mv_target_delay.append(plane(*self.delay_mv_result[if_id][i], *target_pos) / self.delay_scale)
-        # mv_target_delay = np.array(mv_target_delay)
-        # if mv_target_delay.size == 0:
-        #     return
-        # t_data = np.array(self.original_data['t'])
-        # delay_corr = np.interp(t_data, self.delay_mv_t, mv_target_delay,
-        #                        left=mv_target_delay[0], right=mv_target_delay[-1])
-        # phase_offset = delay_corr * float(if_freq) * 2e9 * np.pi
-        # phase = self.original_data['phase'].to_numpy() - phase_offset
-        # phase = (phase + np.pi) % (2 * np.pi) - np.pi
-        # self.original_data['phase'] = phase
-
-        f = interp.interp1d(self.delay_data["t"], self.delay_data["d1"], bounds_error=False, fill_value="extrapolate")
-
-        phase_offset = f(self.original_data['t']) * float(if_freq) * 2e9 * np.pi
-        phase = self.original_data['phase'].to_numpy() - phase_offset
-        phase = (phase + np.pi) % (2 * np.pi) - np.pi
-        self.original_data['phase'] = phase
-
-        self.update_data()
 
     def save(self, adj_dir, mv_dir):
         """
@@ -513,15 +534,20 @@ class Antenna:
         mv_table.to_csv(mv_dir, index=False)
 
     def save_delay(self, delay_adj_dir, delay_mv_dir):
+        self._refresh_delay_target_series()
         self.delay_adjust_info.to_csv(delay_adj_dir, index=False)
-        mv_table = pd.DataFrame({'t': self.delay_mv_t if self.delay_mv_t is not None else []})
-        if isinstance(self.delay_mv_result, dict):
-            for if_id, mv_res in self.delay_mv_result.items():
-                mv_target_delay = []
-                for i in range(mv_res.shape[0]):
-                    mv_target_delay.append(plane(*mv_res[i], *self.target_pos) / self.delay_scale)
-                mv_table[f"d{if_id}"] = mv_target_delay
+        mv_table = pd.DataFrame({
+            't': self.delay_average_t if self.delay_average_t is not None else [],
+            'mbdelay': self.delay_average if self.delay_average is not None else [],
+        })
         mv_table.to_csv(delay_mv_dir, index=False)
+        if self.delay_target_if:
+            detail_path = delay_mv_dir.replace(".csv", "-IFS.csv")
+            detail_table = pd.DataFrame({'t': self.delay_mv_t if self.delay_mv_t is not None else []})
+            for if_id in self.delay_if_ids:
+                if if_id in self.delay_target_if and self.delay_target_if[if_id].size > 0:
+                    detail_table[f'd{if_id}'] = self.delay_target_if[if_id]
+            detail_table.to_csv(detail_path, index=False)
 
     def update_data(self):
         self.data = self.original_data.copy(deep=True)
@@ -540,6 +566,12 @@ class Antenna:
         self.delay_data = self.original_delay_data.copy(deep=True)
         if self.delay_data.empty:
             return
+        for if_id in self.delay_if_ids:
+            wrap_col = f'w{if_id}'
+            delay_col = f'd{if_id}'
+            if wrap_col in self.delay_adjust_info.columns and delay_col in self.delay_data.columns:
+                wrap_step = 1.0 / (self.if_freq.get(if_id, 1.0) * 1e9)
+                self.delay_data[delay_col] += -self.delay_adjust_info[wrap_col].to_numpy() * wrap_step
         non_flagged_index = self.delay_adjust_info['flag'] == 0
         self.delay_data = self.delay_data.loc[non_flagged_index]
         self.delay_data.reset_index(drop=True, inplace=True)
@@ -580,6 +612,42 @@ class Antenna:
                 normalized_weights = (weights / np.sum(weights)).reshape(smo_window_i * 2 + 1, 1)
                 mv_smo[if_id][i] = np.sum(normalized_weights * arr[i - smo_window_i:i + smo_window_i + 1], axis=0)
         self.delay_mv_result = mv_smo
+        self._refresh_delay_target_series()
+
+    def plot_delay_normal_vector(self, if_id=None):
+        if if_id is None:
+            if_id = self.delay_if_ids[0] if self.delay_if_ids else 0
+        if if_id not in self.delay_mv_result:
+            return plt.figure(figsize=(8, 4))
+        linestyles = ['-', '--', ':']
+        fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+        fig.subplots_adjust(left=0.07, right=0.98, top=0.98, bottom=0.1)
+        for i in range(self.delay_mv_result[if_id].shape[1]):
+            ax.plot(self.delay_mv_t, self.delay_mv_result[if_id][:, i], ls=linestyles[i], label=chr(120 + i))
+        ax.legend()
+        ax.set_xlabel("time (day)")
+        ax.set_title(f"Delay Normal Vector (IF{if_id + 1})")
+        return fig
+
+    def _refresh_delay_target_series(self):
+        if self.target_pos is None:
+            self.delay_average = np.array([])
+            self.delay_average_t = np.array([])
+            return
+        refreshed = {}
+        for if_id, mv_res in self.delay_mv_result.items():
+            scale = self.delay_scale.get(if_id, 1.0)
+            refreshed[if_id] = np.array(
+                [-plane(*mv_res[i], *self.target_pos) / scale for i in range(mv_res.shape[0])]
+            ) if mv_res.size > 0 else np.array([])
+        self.delay_target_if = refreshed
+        valid = [arr for arr in self.delay_target_if.values() if arr.size > 0]
+        if valid:
+            self.delay_average = np.mean(np.vstack(valid), axis=0)
+            self.delay_average_t = np.array(self.delay_mv_t)
+        else:
+            self.delay_average = np.array([])
+            self.delay_average_t = np.array([])
 
     def _get_extended_data(self, extend_length=10):
         """
