@@ -8,10 +8,11 @@ import copy
 from .RootWindow import RootWindow
 from .ConfigWindow import ConfigWindow
 from .AdjustWindow import AdjustWindow
+from .Antenna import Antenna
 
 
 class Gui:
-    def __init__(self, target, primary, antenna, config, target_relative_position, secondary_calibrators, mv_flag=False):
+    def __init__(self, target, primary, antenna: Antenna, config, target_relative_position, secondary_calibrators, mv_flag=False):
         self.target = target
         self.primary = primary
         self.antenna = antenna

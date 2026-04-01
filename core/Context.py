@@ -52,9 +52,25 @@ class Context:
             return {}
     
     @classmethod
-    def filter_basic_structure(cls, obj: Dict, allowed_types=(int, float, bool, str, type(None))) -> Dict:
+    def filter_basic_structure(cls, obj, allowed_types=(int, float, bool, str, type(None))) -> Dict:
         if isinstance(obj, allowed_types):
             return obj
+        # Optional dependencies: handle numpy / pandas containers if available
+        try:
+            import numpy as np
+        except Exception:
+            np = None
+        if np is not None:
+            if isinstance(obj, np.ndarray):
+                return cls.filter_basic_structure(obj.tolist())
+            if isinstance(obj, np.generic):
+                return cls.filter_basic_structure(obj.item())
+        try:
+            import pandas as pd
+        except Exception:
+            pd = None
+        if pd is not None and isinstance(obj, pd.DataFrame):
+            return cls.filter_basic_structure(obj.to_dict(orient="list"))
         elif isinstance(obj, dict):
             result = {}
             for k, v in obj.items():

@@ -78,9 +78,9 @@ class MVRun(Plugin):
 
             calibrator_table = pd.DataFrame.from_dict(target["CALIBRATORS"])
             secondary_calibrators = []
-            sn_all = pd.DataFrame(columns=["t", "antenna", "calsour", "p0"])
+            phase_columns = [f"p{if_id}" for if_id in range(no_if)]
             delay_columns = [f"d{if_id}" for if_id in range(no_if)]
-            sn_all_delay = pd.DataFrame(columns=["t", "antenna", "calsour"] + delay_columns)
+            sn_all = pd.DataFrame(columns=["t", "antenna", "calsour"] + phase_columns + delay_columns)
 
             for _, row in calibrator_table.iterrows():
                 if int(row["ID"]) == int(primary["ID"]):
@@ -93,30 +93,19 @@ class MVRun(Plugin):
                     context.logger.error(f"SN file not found: {sn_path}")
                     return False
                 sn_table = pd.read_csv(sn_path)
-                sn_table = sn_table.loc[sn_table["p0"] != 0].copy(deep=True)
-                total_delay = pd.DataFrame({
-                    "t": sn_table["t"],
-                    "antenna": sn_table["antenna"],
-                    "calsour": sn_table["calsour"],
-                })
-                for if_id in range(no_if):
-                    freq_hz = float(if_freq[if_id]) * 1e9
-                    total_delay[f"d{if_id}"] = sn_table["mbdelay"] - sn_table[f"p{if_id}"] / (2 * np.pi * freq_hz)
+                valid_phase = (sn_table[phase_columns] != 0).all(axis=1)
+                sn_table = sn_table.loc[valid_phase].copy(deep=True)
 
                 calibrator = Calibrator(int(row["ID"]), row["NAME"], row["RA"], row["DEC"], int(row["SN"]), sn_table)
                 calibrator.calc_relative_position(primary_ra, primary_dec)
                 secondary_calibrators.append(calibrator)
-                sn_all = pd.concat([sn_all, sn_table[["t", "antenna", "calsour", "p0"]]], ignore_index=True)
-                sn_all_delay = pd.concat([sn_all_delay, total_delay], ignore_index=True)
+                sn_all = pd.concat([sn_all, sn_table[["t", "antenna", "calsour"] + phase_columns + delay_columns]], ignore_index=True)
 
             sn_all["antenna"] = sn_all["antenna"].astype(int)
             sn_all["calsour"] = sn_all["calsour"].astype(int)
-            sn_all_delay["antenna"] = sn_all_delay["antenna"].astype(int)
-            sn_all_delay["calsour"] = sn_all_delay["calsour"].astype(int)
 
             for calibrator in secondary_calibrators:
                 sn_all.loc[sn_all["calsour"] == calibrator.id, ["x", "y"]] = [calibrator.dx, calibrator.dy]
-                sn_all_delay.loc[sn_all_delay["calsour"] == calibrator.id, ["x", "y"]] = [calibrator.dx, calibrator.dy]
 
             antenna_table = pd.DataFrame.from_dict(context.get_context().get("antennas", []))
             refant_id = int(context.get_context().get("ref_ant", {}).get("ID", -1))
@@ -129,15 +118,10 @@ class MVRun(Plugin):
                 if sn_antenna.shape[0] <= 10:
                     antennas_exclude.loc[antennas_exclude.index.size] = [row["ID"], row["NAME"]]
                     continue
-                phase_stub = sn_antenna[["calsour", "x", "y", "t"]].copy(deep=True)
-                phase_stub["phase"] = sn_antenna["p0"]
-                phase_stub.sort_values(by="t", inplace=True, ascending=True)
-                phase_stub.reset_index(drop=True, inplace=True)
-                sn_delay_antenna = sn_all_delay.loc[sn_all_delay["antenna"] == int(row["ID"])]
-                sn_delay = sn_delay_antenna[["calsour", "x", "y", "t"] + delay_columns].copy(deep=True)
+                sn_delay = sn_antenna[["calsour", "x", "y", "t"] + phase_columns + delay_columns].copy(deep=True)
                 sn_delay.sort_values(by="t", inplace=True, ascending=True)
                 sn_delay.reset_index(drop=True, inplace=True)
-                antenna = Antenna(int(row["ID"]), row["NAME"], phase_stub, secondary_calibrators, sn_delay, if_freq)
+                antenna = Antenna(int(row["ID"]), row["NAME"], sn_delay, secondary_calibrators, if_freq, no_if)
                 antennas.append(antenna)
 
             target_relative_position = relative_position([primary_ra, primary_dec], [target["RA"], target["DEC"]])

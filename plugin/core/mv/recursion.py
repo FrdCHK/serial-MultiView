@@ -10,25 +10,26 @@ from .rodrigues_rotation import rodrigues_rotation
 from .Node import Node
 
 
-def recursion(data, position, depth_remain, norm_vec, accumulated_wrap, action, max_ang_v, parent, min_z=0.67):
+def recursion(data, position, depth_remain, norm_vec, accumulated_wrap, action, max_ang_v, parent, freq, min_z=0.67):
     """
     Recursive function for locally minimal rotation angle in total
     :param data: input data of calibrators
     :param position: current index in data
     :param depth_remain: remaining recursion depth
-    :param norm_vec: normal vector of phase plane
+    :param norm_vec: normal vector of delay plane
     :param accumulated_wrap: accumulated 2pi-wrap for each calibrator in the recursive path
     :param action: action to take: 1 +2pi, 0 +0, -1 -2pi
     :param max_ang_v: max angular velocity of the plane for pruning
     :param parent: parent node of the tree
+    :param freq: reference frequency
     :param min_z: minimum z value of normal vector
     :return: this node
     """
     accu = copy.deepcopy(accumulated_wrap)
     calsour = data.loc[position, 'calsour']
-    accu[calsour] += action * 2 * np.pi
-    current_phase = data.loc[position, 'phase'] + accu[calsour]
-    current_point = np.array([data.loc[position, 'x'], data.loc[position, 'y'], current_phase])
+    accu[calsour] += action / freq
+    current_delay = data.loc[position, 'total_delay'] + accu[calsour]
+    current_point = np.array([data.loc[position, 'x'], data.loc[position, 'y'], current_delay])
     current_norm, _, current_angle = rodrigues_rotation(norm_vec, current_point)
     current_norm = current_norm / np.linalg.norm(current_norm)
     abs_angle = np.abs(current_angle)
@@ -47,7 +48,7 @@ def recursion(data, position, depth_remain, norm_vec, accumulated_wrap, action, 
     new_node = Node({'prune': False, 'position': position, 'action': action, 'angle': abs_angle,
                         'total': parent.data['total'] + abs_angle, 'norm': current_norm})
     if depth_remain > 1 and position < data.index.size - 1:
-        new_node.current = recursion(data, position + 1, depth_remain - 1, current_norm, accu, 0, max_ang_v, new_node, min_z)
-        new_node.plus = recursion(data, position + 1, depth_remain - 1, current_norm, accu, 1, max_ang_v, new_node, min_z)
-        new_node.minus = recursion(data, position + 1, depth_remain - 1, current_norm, accu, -1, max_ang_v, new_node, min_z)
+        new_node.current = recursion(data, position + 1, depth_remain - 1, current_norm, accu, 0, max_ang_v, new_node, freq, min_z)
+        new_node.plus = recursion(data, position + 1, depth_remain - 1, current_norm, accu, 1, max_ang_v, new_node, freq, min_z)
+        new_node.minus = recursion(data, position + 1, depth_remain - 1, current_norm, accu, -1, max_ang_v, new_node, freq, min_z)
     return new_node
