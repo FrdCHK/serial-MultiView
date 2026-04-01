@@ -226,7 +226,7 @@ class Antenna:
         root.rerun()
 
     def plot_normal_vector(self):
-        linestyles = ['-', '--', ':']
+        linestyles = ['--', ':', '-']
         fig, ax = plt.subplots(1, 1, figsize=(8, 4))
         fig.subplots_adjust(left=0.07, right=0.98, top=0.98, bottom=0.1)
         for i in range(self.mv_result.shape[1]):
