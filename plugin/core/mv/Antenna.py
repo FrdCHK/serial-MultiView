@@ -271,7 +271,7 @@ class Antenna:
         self.delay_t_flag_info = []
         self.update_delay_data()
 
-    def plot_delay(self, target_pos, if_id=0, adjusted=False):
+    def plot_delay(self, target_pos, if_id=0):
         self.target_pos = target_pos
         self._refresh_delay_target_series()
         markers = ['o', 'd', '^', 's', 'v', 'p', '*', '8', '<', '>']
@@ -282,15 +282,11 @@ class Antenna:
             ax.plot(self.delay_mv_t, self.delay_target_if[if_id] * 1e12, 'x', color='k', ls='', label='Target')
 
         for i, item in enumerate(self.secondary_calibrators):
-            plot_data = self.data.copy(deep=True) if adjusted else self.original_data.copy(deep=True)
-            if not adjusted:
-                non_flagged_index = self.delay_adjust_info['flag'] == 0
-                plot_data = plot_data.loc[non_flagged_index]
+            plot_data = self.data.copy(deep=True)
             plot_data = plot_data.loc[plot_data['calsour'] == item.id]
             if not plot_data.empty:
-                col = f"d{if_id}"
-                if col in plot_data.columns:
-                    ax.plot(plot_data['t'], plot_data[col] * 1e12, ls='none', marker=markers[i], label=item.name)
+                plot_delay = plot_data[f"d{if_id}"] + plot_data[f"p{if_id}"] / self.delay_scale.get(if_id, 1.0)
+                ax.plot(plot_data['t'], plot_delay * 1e12, ls='none', marker=markers[i], label=item.name)
 
         flagged_index = self.delay_adjust_info['flag'] == 1
         flagged_data = self.original_data.loc[flagged_index].copy(deep=True)
@@ -298,9 +294,8 @@ class Antenna:
         for i, item in enumerate(self.secondary_calibrators):
             plot_data = flagged_data.loc[flagged_data['calsour'] == item.id]
             if not plot_data.empty:
-                col = f"d{if_id}"
-                if col in plot_data.columns:
-                    ax.plot(plot_data['t'], plot_data[col] * 1e12, ls='none', marker=markers[i], c=self.colors[i], alpha=0.3)
+                plot_delay = plot_data[f"d{if_id}"] + plot_data[f"p{if_id}"] / self.delay_scale.get(if_id, 1.0)
+                ax.plot(plot_data['t'], plot_delay * 1e12, ls='none', marker=markers[i], c=self.colors[i], alpha=0.3)
 
         ax.set_xlabel("time (day)")
         ax.set_ylabel("total delay (ps)")

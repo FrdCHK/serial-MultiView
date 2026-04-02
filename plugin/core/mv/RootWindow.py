@@ -103,7 +103,7 @@ class RootWindow:
             os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY-VECTOR.pdf"),
             bbox_inches='tight'
         )
-        self.adjust_window.phase_plot()
+        self.adjust_window.delay_plot()
         self.adjust_window.present_phase_fig.savefig(
             os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY.png"),
             bbox_inches='tight'
@@ -134,8 +134,7 @@ class RootWindow:
         )
         self.root_normal_vector_plot()
         if adjust and self.adjust_window is not None:
-            self.adjust_window.phase_plot()
-            self.adjust_window.manual_toggle.set(False)
+            self.adjust_window.delay_plot()
 
     def load(self, do_rerun=True):
         with open(self.conf_dir, 'r') as f:

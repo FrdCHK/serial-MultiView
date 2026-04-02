@@ -46,11 +46,13 @@ class AdjustWindow:
 
         self.present_phase_fig = None
         self.present_phase_canvas = None
+        self.present_phase_ax = None
         self.green_line = None
         self.red_line = None
         self.timerange_start = None
         self.timerange_end = None
         self.fill = None
+        self.y_limits = None
 
         self.frames[1].grid_rowconfigure(0, weight=1)
         self.frames[1].grid_columnconfigure(0, weight=12)
@@ -62,11 +64,6 @@ class AdjustWindow:
             frame = tk.Frame(self.frames[1])
             frame.grid(row=0, column=col, sticky="nsew", padx=5, pady=5)
             self.lower_frames.append(frame)
-
-        self.manual_toggle = tk.BooleanVar(value=False)
-        manual_toggle = tk.Checkbutton(self.lower_frames[1], text="manual adjustment", font=self.font,
-                                       variable=self.manual_toggle, command=self.on_manual_toggle)
-        manual_toggle.pack(padx=5, pady=5)
 
         self.reverse_toggle = tk.BooleanVar(value=bool(self.antenna.reverse))
         reverse_toggle = tk.Checkbutton(self.lower_frames[1], text="reverse", font=self.font,
@@ -87,13 +84,19 @@ class AdjustWindow:
         label_info = tk.Label(self.lower_frames[1], text="-- secondary calibrator selection --",
                               width=36, font=self.font, anchor="center")
         label_info.pack(padx=5, pady=5)
+        calibrator_frame = tk.Frame(self.lower_frames[1])
+        calibrator_frame.pack(padx=5, pady=5, fill="x")
+        calibrator_frame.grid_columnconfigure(0, weight=1)
+        calibrator_frame.grid_columnconfigure(1, weight=1)
         self.calibrator_toggle_var = [tk.BooleanVar(value=False) for _ in range(len(self.secondary_calibrators))]
         self.calibrator_adjust = []
         for i, item in enumerate(self.secondary_calibrators):
             calibrator_toggle = tk.Checkbutton(self.lower_frames[1], text=item.name, font=self.font,
                                                variable=self.calibrator_toggle_var[i],
                                                command=lambda j=i: self.on_calibrator_toggle(j))
-            calibrator_toggle.pack(padx=5, pady=5)
+            row = i // 2
+            col = i % 2
+            calibrator_toggle.grid(in_=calibrator_frame, row=row, column=col, padx=5, pady=5, sticky="w")
 
         self.lower_frames[0].grid_columnconfigure(0, weight=1)
         self.lower_frames[0].grid_rowconfigure(0, weight=1)
@@ -102,13 +105,13 @@ class AdjustWindow:
 
         self.lower_frames[2].grid_columnconfigure(0, weight=1)
         self.lower_frames[2].grid_columnconfigure(1, weight=1)
-        for row in range(4):
+        for row in range(7):
             self.lower_frames[2].grid_rowconfigure(row, weight=1)
 
-        plus_button = tk.Button(self.lower_frames[2], height=2, width=10, text="+2pi", font=self.font,
+        plus_button = tk.Button(self.lower_frames[2], height=2, width=10, text="+1/freq", font=self.font,
                                 command=lambda: self.on_wrap('+'))
         plus_button.grid(row=0, column=0, padx=5, pady=5)
-        minus_button = tk.Button(self.lower_frames[2], height=2, width=10, text="-2pi", font=self.font,
+        minus_button = tk.Button(self.lower_frames[2], height=2, width=10, text="-1/freq", font=self.font,
                                  command=lambda: self.on_wrap('-'))
         minus_button.grid(row=0, column=1, padx=5, pady=5)
         flag_button = tk.Button(self.lower_frames[2], height=2, width=10, text="flag", font=self.font,
@@ -127,25 +130,31 @@ class AdjustWindow:
                                  command=self.on_reset)
         reset_button.grid(row=3, column=0, columnspan=2, padx=5, pady=5)
 
-        self.phase_plot()
+        label_ylim = tk.Label(self.lower_frames[2], text="-- y limit (ps) --", width=18, font=self.font, anchor="center")
+        label_ylim.grid(row=4, column=0, columnspan=2, padx=5, pady=5)
+        self.ymin_var = tk.StringVar(value="")
+        self.ymax_var = tk.StringVar(value="")
+        ymin_entry = tk.Entry(self.lower_frames[2], textvariable=self.ymin_var, font=self.font, width=8)
+        ymax_entry = tk.Entry(self.lower_frames[2], textvariable=self.ymax_var, font=self.font, width=8)
+        ymin_entry.grid(row=5, column=0, padx=5, pady=5)
+        ymax_entry.grid(row=5, column=1, padx=5, pady=5)
+        apply_ylim = tk.Button(self.lower_frames[2], height=2, width=10, text="apply", font=self.font,
+                               command=self.on_ylim_apply)
+        apply_ylim.grid(row=6, column=0, padx=5, pady=5)
+        auto_ylim = tk.Button(self.lower_frames[2], height=2, width=10, text="auto", font=self.font,
+                              command=self.on_ylim_auto)
+        auto_ylim.grid(row=6, column=1, padx=5, pady=5)
+
+        self.delay_plot()
 
     def get_selected_if_id(self):
         return self.if_map.get(self.if_var.get(), self.antenna.delay_if_ids[0] if self.antenna.delay_if_ids else 0)
-
-    def on_manual_toggle(self):
-        if self.manual_toggle.get():
-            self.phase_plot_for_adjust()
-        else:
-            self.phase_plot()
 
     def on_reverse_toggle(self):
         self.antenna.reverse = self.reverse_toggle.get()
 
     def on_if_change(self):
-        if self.manual_toggle.get():
-            self.phase_plot_for_adjust()
-        else:
-            self.phase_plot()
+        self.delay_plot()
         self.root.root_normal_vector_plot()
 
     def on_calibrator_toggle(self, num):
@@ -188,28 +197,79 @@ class AdjustWindow:
             self.present_phase_canvas.draw()
 
     def on_wrap(self, mode):
-        if self.manual_toggle.get() and (self.timerange_start is not None) and (self.timerange_end is not None):
+        if (self.timerange_start is not None) and (self.timerange_end is not None):
             self.antenna.delay_wrap([self.timerange_start, self.timerange_end], self.calibrator_adjust, self.get_selected_if_id(), mode)
-            self.phase_plot_for_adjust()
-            self.root.rerun(False)
+            self.delay_plot()
+            # self.root.rerun(False)
 
     def on_flag(self, mode):
-        if self.manual_toggle.get() and (self.timerange_start is not None) and (self.timerange_end is not None):
+        if (self.timerange_start is not None) and (self.timerange_end is not None):
             self.antenna.delay_flag([self.timerange_start, self.timerange_end], self.calibrator_adjust, mode)
-            self.phase_plot_for_adjust()
-            self.root.rerun(False)
+            self.delay_plot()
+            # self.root.rerun(False)
 
     def on_t_flag(self, mode):
-        if self.manual_toggle.get() and (self.timerange_start is not None) and (self.timerange_end is not None):
+        if (self.timerange_start is not None) and (self.timerange_end is not None):
             self.antenna.delay_t_flag([self.timerange_start, self.timerange_end], mode)
-            self.phase_plot_for_adjust()
+            self.delay_plot()
 
     def on_reset(self):
-        if self.manual_toggle.get():
-            self.antenna.delay_reset()
-            self.root.rerun()
+        self.antenna.delay_reset()
+        self.root.rerun()
 
-    def phase_plot(self):
+    def on_ylim_apply(self):
+        if self.present_phase_ax is None:
+            return
+        try:
+            ymin = float(self.ymin_var.get())
+            ymax = float(self.ymax_var.get())
+        except ValueError:
+            return
+        if ymin == ymax:
+            return
+        if ymin > ymax:
+            ymin, ymax = ymax, ymin
+        self.y_limits = (ymin, ymax)
+        self.present_phase_ax.set_ylim(ymin, ymax)
+        if self.present_phase_canvas is not None:
+            self.present_phase_canvas.draw()
+
+    def on_ylim_auto(self):
+        self.y_limits = None
+        self.delay_plot()
+
+    def on_scroll(self, event):
+        if self.present_phase_ax is None:
+            return
+        if event.ydata is None:
+            return
+        y_min, y_max = self.present_phase_ax.get_ylim()
+        if y_min == y_max:
+            return
+        if event.button == 'up':
+            scale = 0.9
+        elif event.button == 'down':
+            scale = 1.1
+        else:
+            return
+        y_center = event.ydata
+        new_half = (y_max - y_min) * 0.5 * scale
+        new_min = y_center - new_half
+        new_max = y_center + new_half
+        self.y_limits = (new_min, new_max)
+        self.present_phase_ax.set_ylim(new_min, new_max)
+        self._sync_ylim_entries()
+        if self.present_phase_canvas is not None:
+            self.present_phase_canvas.draw()
+
+    def _sync_ylim_entries(self):
+        if self.present_phase_ax is None:
+            return
+        y_min, y_max = self.present_phase_ax.get_ylim()
+        self.ymin_var.set(f"{y_min:.3f}")
+        self.ymax_var.set(f"{y_max:.3f}")
+
+    def delay_plot(self):
         if self.green_line is not None:
             self.green_line.remove()
             self.green_line = None
@@ -221,32 +281,20 @@ class AdjustWindow:
         if self.present_phase_fig is not None:
             plt.close(self.present_phase_fig)
 
-        fig = self.antenna.plot_delay(self.target_relative_position, self.get_selected_if_id(), adjusted=False)
-        canvas = FigureCanvasTkAgg(fig, master=self.frames[0])
-        canvas.draw()
-        canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-        self.present_phase_fig = fig
-        self.present_phase_canvas = canvas
-
-    def phase_plot_for_adjust(self):
-        if self.green_line is not None:
-            self.green_line.remove()
-            self.green_line = None
-        if self.red_line is not None:
-            self.red_line.remove()
-            self.red_line = None
-        self.timerange_start = None
-        self.timerange_end = None
-        if self.present_phase_fig is not None:
-            plt.close(self.present_phase_fig)
-
-        fig = self.antenna.plot_delay(self.target_relative_position, self.get_selected_if_id(), adjusted=True)
+        fig = self.antenna.plot_delay(self.target_relative_position, self.get_selected_if_id())
+        ax = fig.axes[0] if fig.axes else None
+        if ax is not None and self.y_limits is not None:
+            ax.set_ylim(*self.y_limits)
         canvas = FigureCanvasTkAgg(fig, master=self.frames[0])
         canvas.draw()
         canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
         canvas.mpl_connect("button_press_event", self.on_click)
+        canvas.mpl_connect("scroll_event", self.on_scroll)
         self.present_phase_fig = fig
         self.present_phase_canvas = canvas
+        self.present_phase_ax = ax
+        if self.present_phase_ax is not None:
+            self._sync_ylim_entries()
 
     def position_plot(self):
         if self.present_position_fig is not None:
