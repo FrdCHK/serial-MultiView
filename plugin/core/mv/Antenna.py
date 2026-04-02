@@ -114,13 +114,9 @@ class Antenna:
         delay_results = {}
         delay_target_if = {}
         for if_id in self.delay_if_ids:
-            p_col = f"p{if_id}"
-            d_col = f"d{if_id}"
-            if d_col not in data_extended.columns:
-                continue
-            scale = self.delay_scale.get(if_id, 1.0)
-            data_view = data_extended[['calsour', 'x', 'y', 't']].copy(deep=True)
-            data_view['total_delay']= (data_extended[d_col] + data_extended[p_col] / scale) * 1e9  # in ns for numerical stability
+            data_extended_corrected = self._correct_delay_with_phase(data_extended, if_id)
+            data_view = data_extended_corrected[['calsour', 'x', 'y', 't', 'total_delay']].copy(deep=True)
+            data_view['total_delay'] = data_view['total_delay'] * 1e9  # in ns for numerical stability
 
             norm_vec = np.array([[0], [0], [1]])
             result = []
@@ -284,18 +280,18 @@ class Antenna:
         for i, item in enumerate(self.secondary_calibrators):
             plot_data = self.data.copy(deep=True)
             plot_data = plot_data.loc[plot_data['calsour'] == item.id]
+            plot_data = self._correct_delay_with_phase(plot_data, if_id)
             if not plot_data.empty:
-                plot_delay = plot_data[f"d{if_id}"] + plot_data[f"p{if_id}"] / self.delay_scale.get(if_id, 1.0)
-                ax.plot(plot_data['t'], plot_delay * 1e12, ls='none', marker=markers[i], label=item.name)
+                ax.plot(plot_data['t'], plot_data['total_delay'] * 1e12, ls='none', marker=markers[i], label=item.name)
 
         flagged_index = self.delay_adjust_info['flag'] == 1
         flagged_data = self.original_data.loc[flagged_index].copy(deep=True)
         flagged_data.reset_index(drop=True, inplace=True)
         for i, item in enumerate(self.secondary_calibrators):
-            plot_data = flagged_data.loc[flagged_data['calsour'] == item.id]
+            plot_data = (flagged_data.copy(deep=True)).loc[flagged_data['calsour'] == item.id]
+            plot_data = self._correct_delay_with_phase(plot_data, if_id)
             if not plot_data.empty:
-                plot_delay = plot_data[f"d{if_id}"] + plot_data[f"p{if_id}"] / self.delay_scale.get(if_id, 1.0)
-                ax.plot(plot_data['t'], plot_delay * 1e12, ls='none', marker=markers[i], c=self.colors[i], alpha=0.3)
+                ax.plot(plot_data['t'], plot_data['total_delay'] * 1e12, ls='none', marker=markers[i], c=self.colors[i], alpha=0.3)
 
         ax.set_xlabel("time (day)")
         ax.set_ylabel("total delay (ps)")
@@ -315,13 +311,13 @@ class Antenna:
             'mbdelay': self.delay_average if self.delay_average is not None else [],
         })
         mv_table.to_csv(delay_mv_dir, index=False)
-        if self.delay_target_if:
-            detail_path = delay_mv_dir.replace(".csv", "-IFS.csv")
-            detail_table = pd.DataFrame({'t': self.delay_mv_t if self.delay_mv_t is not None else []})
-            for if_id in self.delay_if_ids:
-                if if_id in self.delay_target_if and self.delay_target_if[if_id].size > 0:
-                    detail_table[f'd{if_id}'] = self.delay_target_if[if_id]
-            detail_table.to_csv(detail_path, index=False)
+        # if self.delay_target_if:
+        #     detail_path = delay_mv_dir.replace(".csv", "-IFS.csv")
+        #     detail_table = pd.DataFrame({'t': self.delay_mv_t if self.delay_mv_t is not None else []})
+        #     for if_id in self.delay_if_ids:
+        #         if if_id in self.delay_target_if and self.delay_target_if[if_id].size > 0:
+        #             detail_table[f'd{if_id}'] = self.delay_target_if[if_id]
+        #     detail_table.to_csv(detail_path, index=False)
 
     def update_delay_data(self):
         self.data = self.original_data.copy(deep=True)
@@ -416,3 +412,10 @@ class Antenna:
         else:
             self.delay_average = np.array([])
             self.delay_average_t = np.array([])
+    
+    def _correct_delay_with_phase(self, data_in, if_id):
+        scale = self.delay_scale.get(if_id, 1.0)
+        phase_of_delay = (-data_in[f"d{if_id}"] * scale + np.pi) % (2 * np.pi) - np.pi
+        delta_phase = data_in[f"p{if_id}"] - phase_of_delay
+        data_in["total_delay"] = data_in[f"d{if_id}"] - delta_phase / scale
+        return data_in

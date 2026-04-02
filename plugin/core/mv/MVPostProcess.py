@@ -173,7 +173,7 @@ class MVPostProcess(Plugin):
                         row.delay_2[j] += delay_corr
                     except Exception:
                         pass
-                    phase = phase0 + delay_corr * if_freq[j] * 2e9 * math.pi
+                    phase = phase0 - delay_corr * if_freq[j] * 2e9 * math.pi
                     row.real1[j] = math.cos(phase)
                     row.imag1[j] = math.sin(phase)
                     row.real2[j] = math.cos(phase)

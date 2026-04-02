@@ -11,9 +11,11 @@ from astropy.wcs import WCS
 from matplotlib import rc
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+from .Antenna import Antenna
+
 
 class AdjustWindow:
-    def __init__(self, root, antenna, config, target, primary, target_relative_position, secondary_calibrators):
+    def __init__(self, root, antenna: Antenna, config, target, primary, target_relative_position, secondary_calibrators):
         self.root = root
         self.antenna = antenna
         self.config = config
