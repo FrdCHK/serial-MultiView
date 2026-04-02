@@ -162,13 +162,15 @@ class MVPostProcess(Plugin):
                 else:
                     delay_corr = 0.0
                 try:
-                    row.mbdelay1 = row.mbdelay1 + delay_corr
+                    row.mbdelay1 += delay_corr
+                    row.mbdelay2 += delay_corr
                 except Exception:
                     pass
                 for j in range(int(context.get_context().get("no_if", 1))):
                     phase0 = math.atan2(row.imag1[j], row.real1[j])
                     try:
-                        row.delay_1[j] = row.delay_1[j] + delay_corr
+                        row.delay_1[j] += delay_corr
+                        row.delay_2[j] += delay_corr
                     except Exception:
                         pass
                     phase = phase0 + delay_corr * if_freq[j] * 2e9 * math.pi
