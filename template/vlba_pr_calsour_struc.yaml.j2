@@ -184,8 +184,8 @@ plugins:
       jmfit: True
 {# niter for JMFIT #}
       niter: 30
-{# Do target mapping again without structure correction for comparison. This is not necessary. #}
-  - name: PRTargetMapping
+{# Do target mapping again without structure correction for comparison. This is not mandatory. #}
+{#  - name: PRTargetMapping
     params:
       indisk: {{ indisk }}
       structure: False
@@ -198,6 +198,6 @@ plugins:
       ltype: -4
       uvwtfn: ''
       jmfit: True
-      niter: 30
+      niter: 30 #}
   - name: Exit
     params: {}
