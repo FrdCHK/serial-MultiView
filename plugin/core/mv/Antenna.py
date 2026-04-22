@@ -7,18 +7,20 @@ import numpy as np
 import pandas as pd
 import copy
 import matplotlib.pyplot as plt
-import scipy.interpolate as interp
-import pdb
+# import scipy.interpolate as interp
+# import pdb
+from typing import List
 
+from .Calibrator import Calibrator
 from .plane import plane
 from .Node import Node
 from .recursion import recursion
 from .find_min_leaf import find_min_leaf
-from .rodrigues_rotation import rodrigues_rotation
+# from .rodrigues_rotation import rodrigues_rotation
 
 
 class Antenna:
-    def __init__(self, antenna_id, antenna_name, data=None, calibrators=None, if_freq=None, no_if=1):
+    def __init__(self, antenna_id, antenna_name, data=None, calibrators: List[Calibrator]=None, if_freq=None, no_if=1):
         """
         antenna class for MultiView
         :param antenna_id: antenna id
@@ -65,6 +67,15 @@ class Antenna:
         self.delay_t_flag_info = []
         self.delay_mv_result = None
         self.delay_mv_t = None
+
+        # how the z axis is scaled for sMV
+        max_xy = 0.
+        for calibrator in self.secondary_calibrators:
+            cal_max_xy = max(abs(calibrator.dx), abs(calibrator.dy))
+            max_xy = max_xy if max_xy > cal_max_xy else cal_max_xy
+        max_z = self.data[[f'd{if_id}' for if_id in self.delay_if_ids]].abs().max().max()
+        self.z_scale = max_xy / max_z
+
         self.delay_scale = {
             if_id: float(self.if_freq.get(if_id, 1.0)) * 2e9 * np.pi
             for if_id in self.delay_if_ids
@@ -116,7 +127,7 @@ class Antenna:
         for if_id in self.delay_if_ids:
             data_extended_corrected = self._correct_delay_with_phase(data_extended, if_id)
             data_view = data_extended_corrected[['calsour', 'x', 'y', 't', 'total_delay']].copy(deep=True)
-            data_view['total_delay'] = data_view['total_delay'] * 1e9  # in ns for numerical stability
+            data_view['total_delay'] = data_view['total_delay'] * self.z_scale  # for numerical stability
 
             norm_vec = np.array([[0], [0], [1]])
             result = []
@@ -399,12 +410,10 @@ class Antenna:
             return
         refreshed = {}
         for if_id, mv_res in self.delay_mv_result.items():
-            # scale = self.delay_scale.get(if_id, 1.0)
             refreshed[if_id] = np.array(
-                [plane(*mv_res[i], *self.target_pos) * 1e-9 for i in range(mv_res.shape[0])]
+                [plane(*mv_res[i], *self.target_pos) / self.z_scale for i in range(mv_res.shape[0])]
             ) if mv_res.size > 0 else np.array([])
         self.delay_target_if = refreshed
-        # pdb.set_trace()
         valid = [arr for arr in self.delay_target_if.values() if arr.size > 0]
         if valid:
             self.delay_average = np.mean(np.vstack(valid), axis=0)
