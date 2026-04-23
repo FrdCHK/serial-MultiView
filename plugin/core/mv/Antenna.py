@@ -145,16 +145,16 @@ class Antenna:
             P = np.eye(n)
             for i in range(data_view.index.size):
                 calsour_this = data_view.loc[i, 'calsour']
-                freq = self.if_freq.get(if_id, 1.0)
+                freq = self.if_freq.get(if_id, 1.0) * 1e9 / self.z_scale  # here scale the freq
                 root_node.current = recursion(data_view, i, max_depth, norm_vec, accu, 0, ang_v, root_node, freq, z_lim)
                 root_node.plus = recursion(data_view, i, max_depth, norm_vec, accu, 1, ang_v, root_node, freq, z_lim)
                 root_node.minus = recursion(data_view, i, max_depth, norm_vec, accu, -1, ang_v, root_node, freq, z_lim)
                 norm_series = None
-                if i > 5:
+                if i > 8:
                     norm_series = np.zeros((i, 4))
                     norm_series[:, 0] = data_view.loc[:i - 1, 't']
                     norm_series[:, 1:] = np.array(result)
-                    norm_series = norm_series[-6:, :]
+                    norm_series = norm_series[-9:, :]
                 min_node, min_path = find_min_leaf(norm_series, data_view['t'], i, root_node, norm_vec, weight, (max_depth, max_ang_v, min_z))
                 if min_node is None:
                     result.append(norm_vec.flatten())
@@ -162,6 +162,11 @@ class Antenna:
                     continue
                 selected_next = min_path[1]
                 accu[calsour_this] += selected_next['action'] / freq
+                
+                # update self.data
+                if i >= extend_length and abs(selected_next['action']) > 1e-10:
+                    self.delay_wrap([data_view.loc[i, 't']-1e-8, data_view.loc[data_view.index.size - 1, 't']+1e-8], [calsour_this], if_id, '+' if selected_next['action'] > 0 else '-')
+
                 x_hat = A @ x_hat
                 P = A @ P @ A.T + Q
                 K = P @ H.T @ np.linalg.inv(H @ P @ H.T + R)
@@ -293,7 +298,7 @@ class Antenna:
             plot_data = plot_data.loc[plot_data['calsour'] == item.id]
             plot_data = self._correct_delay_with_phase(plot_data, if_id)
             if not plot_data.empty:
-                ax.plot(plot_data['t'], plot_data['total_delay'] * 1e12, ls='none', marker=markers[i], label=item.name)
+                ax.plot(plot_data['t'], plot_data["total_delay"] * 1e12, ls='none', marker=markers[i], label=item.name)
 
         flagged_index = self.delay_adjust_info['flag'] == 1
         flagged_data = self.original_data.loc[flagged_index].copy(deep=True)
@@ -302,7 +307,7 @@ class Antenna:
             plot_data = (flagged_data.copy(deep=True)).loc[flagged_data['calsour'] == item.id]
             plot_data = self._correct_delay_with_phase(plot_data, if_id)
             if not plot_data.empty:
-                ax.plot(plot_data['t'], plot_data['total_delay'] * 1e12, ls='none', marker=markers[i], c=self.colors[i], alpha=0.3)
+                ax.plot(plot_data['t'], plot_data["total_delay"] * 1e12, ls='none', marker=markers[i], c=self.colors[i], alpha=0.3)
 
         ax.set_xlabel("time (day)")
         ax.set_ylabel("total delay (ps)")
