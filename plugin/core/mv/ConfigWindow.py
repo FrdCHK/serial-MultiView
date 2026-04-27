@@ -67,7 +67,7 @@ class ConfigWindow:
 
         valid = True
         types = [int, float, float, float, int, float]
-        ranges = [[1, 10], [0., 10000.], [0., 1.], [0, 10.], [0, 20], [0, 10]]
+        ranges = [[1, 10], [0., 10000.], [0, 1.], [1e-20, 10.], [0, 20], [0, 10]]
         out_entries = []
         for i, item in enumerate(self.entries):
             try:

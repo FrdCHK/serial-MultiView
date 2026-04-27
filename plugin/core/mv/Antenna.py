@@ -298,7 +298,7 @@ class Antenna:
             plot_data = plot_data.loc[plot_data['calsour'] == item.id]
             plot_data = self._correct_delay_with_phase(plot_data, if_id)
             if not plot_data.empty:
-                ax.plot(plot_data['t'], plot_data["total_delay"] * 1e12, ls='none', marker=markers[i], label=item.name)
+                ax.plot(plot_data['t'], plot_data["total_delay"] * 1e12, ls='none', marker=markers[i], c=self.colors[i], label=item.name)
 
         flagged_index = self.delay_adjust_info['flag'] == 1
         flagged_data = self.original_data.loc[flagged_index].copy(deep=True)
