@@ -22,8 +22,8 @@ class ConfigWindow:
 
         self.window = tk.Toplevel(root.root)
         self.window.title("CONFIG")
-        self.window.geometry("600x290+0+660")
-        self.window.minsize(width=600, height=290)
+        self.window.geometry("532x290+67+660")
+        self.window.minsize(width=532, height=290)
 
         self.window.grid_columnconfigure(0, weight=1)
         self.window.grid_columnconfigure(1, weight=1)

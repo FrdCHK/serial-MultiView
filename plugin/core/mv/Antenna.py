@@ -283,12 +283,12 @@ class Antenna:
         self.delay_t_flag_info = []
         self.update_delay_data()
 
-    def plot_delay(self, target_pos, if_id=0):
+    def plot_delay(self, target_pos, if_id=0, original_delay_id=None):
         self.target_pos = target_pos
         self._refresh_delay_target_series()
         markers = ['o', 'd', '^', 's', 'v', 'p', '*', '8', '<', '>']
         fig, ax = plt.subplots(1, 1, figsize=(8, 3))
-        fig.subplots_adjust(left=0.06, right=0.99, top=0.98, bottom=0.1)
+        fig.subplots_adjust(left=0.05, right=0.95, top=0.98, bottom=0.12)
 
         if if_id in self.delay_target_if and self.delay_target_if[if_id].size > 0:
             ax.plot(self.delay_mv_t, self.delay_target_if[if_id] * 1e12, 'x', color='k', ls='', label='Target')
@@ -309,9 +309,19 @@ class Antenna:
             if not plot_data.empty:
                 ax.plot(plot_data['t'], plot_data["total_delay"] * 1e12, ls='none', marker=markers[i], c=self.colors[i], alpha=0.3)
 
+        # original delay
+        if original_delay_id is not None:
+            delay = self.original_data.loc[self.original_data['calsour'] == original_delay_id]
+            if not delay.empty:
+                ax.plot(delay['t'], delay[f"d{if_id}"] * 1e12, ls='-', marker=None, c="#888888", alpha=0.7, label=f"Ori. delay")
+
         ax.set_xlabel("time (day)")
         ax.set_ylabel("total delay (ps)")
         ax.set_title(f"IF{if_id + 1}")
+        # ax.secondary_yaxis("right")
+        scale = self.delay_scale.get(if_id)
+        ax_r = ax.secondary_yaxis("right", functions=(lambda x: -x*scale/1e12, lambda x: -x/scale*1e12))
+        ax_r.set_ylabel("corresponding phase (rad)", rotation=90)
         for item in self.delay_t_flag_info:
             y_lim = ax.get_ylim()
             ax.fill_betweenx(y_lim, item[0], item[1], color='#FFB6C1', alpha=0.15)

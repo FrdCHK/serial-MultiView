@@ -57,8 +57,8 @@ class AdjustWindow:
         self.y_limits = None
 
         self.frames[1].grid_rowconfigure(0, weight=1)
-        self.frames[1].grid_columnconfigure(0, weight=12)
-        self.frames[1].grid_columnconfigure(1, weight=10)
+        self.frames[1].grid_columnconfigure(0, weight=18, minsize=300)
+        self.frames[1].grid_columnconfigure(1, weight=8, minsize=460)
         self.frames[1].grid_columnconfigure(2, weight=10)
 
         self.lower_frames = []
@@ -67,43 +67,90 @@ class AdjustWindow:
             frame.grid(row=0, column=col, sticky="nsew", padx=5, pady=5)
             self.lower_frames.append(frame)
 
+        self.lower_frames[0].grid_columnconfigure(0, weight=1)
+        self.lower_frames[0].grid_rowconfigure(0, weight=1)
+        self.present_position_fig = None
+        self.position_plot()
+
+        middle_container = tk.Frame(self.lower_frames[1])
+        middle_container.pack(padx=5, pady=5, fill="both", expand=True)
+        middle_container.grid_columnconfigure(0, weight=4, minsize=230)
+        middle_container.grid_columnconfigure(1, weight=1, minsize=230)
+        middle_container.grid_rowconfigure(0, weight=1)
+
+        left_controls_frame = tk.Frame(middle_container)
+        left_controls_frame.grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
+        left_controls_frame.grid_columnconfigure(0, weight=1)
+        right_calibrator_frame = tk.Frame(middle_container)
+        right_calibrator_frame.grid(row=0, column=1, padx=5, pady=5, sticky="nsew")
+        right_calibrator_frame.grid_propagate(False)
+        right_calibrator_frame.grid_rowconfigure(1, weight=1)
+        right_calibrator_frame.grid_columnconfigure(0, weight=1)
+
         self.reverse_toggle = tk.BooleanVar(value=bool(self.antenna.reverse))
-        reverse_toggle = tk.Checkbutton(self.lower_frames[1], text="reverse", font=self.font,
+        reverse_toggle = tk.Checkbutton(left_controls_frame, text="reverse", font=self.font,
                                         variable=self.reverse_toggle, command=self.on_reverse_toggle)
         reverse_toggle.pack(padx=5, pady=5)
 
-        label_if = tk.Label(self.lower_frames[1], text="-- IF selection --", width=36, font=self.font, anchor="center")
-        label_if.pack(padx=5, pady=5)
+        label_if = tk.Label(left_controls_frame, text="-- IF selection --", font=self.font, anchor="center")
+        label_if.pack(padx=5, pady=5, fill="x")
         self.if_options = [f"IF{if_id + 1}" for if_id in self.antenna.delay_if_ids] or ["IF1"]
         self.if_map = {label: if_id for label, if_id in zip(self.if_options, self.antenna.delay_if_ids)}
         if not self.if_map:
             self.if_map = {"IF1": 0}
         self.if_var = tk.StringVar(value=self.if_options[0])
-        if_menu = tk.OptionMenu(self.lower_frames[1], self.if_var, *self.if_options, command=lambda _: self.on_if_change())
+        if_menu = tk.OptionMenu(left_controls_frame, self.if_var, *self.if_options, command=lambda _: self.on_if_change())
         if_menu.config(font=self.font)
         if_menu.pack(padx=5, pady=5)
 
-        label_info = tk.Label(self.lower_frames[1], text="-- secondary calibrator selection --",
-                              width=36, font=self.font, anchor="center")
-        label_info.pack(padx=5, pady=5)
-        calibrator_frame = tk.Frame(self.lower_frames[1])
-        calibrator_frame.pack(padx=5, pady=5, fill="x")
-        calibrator_frame.grid_columnconfigure(0, weight=1)
-        calibrator_frame.grid_columnconfigure(1, weight=1)
+        label_original_delay = tk.Label(left_controls_frame, text="-- Original delay --", font=self.font, anchor="center")
+        label_original_delay.pack(padx=5, pady=5, fill="x")
+        self.secondary_calibrator_label_to_id = {"-": None}
+        for item in self.secondary_calibrators:
+            self.secondary_calibrator_label_to_id[item.name] = int(item.id)
+        self.original_delay_var = tk.StringVar(value="-")
+        self.selected_original_delay_id = None
+        original_delay_menu = tk.OptionMenu(
+            left_controls_frame,
+            self.original_delay_var,
+            *self.secondary_calibrator_label_to_id.keys(),
+            command=self.on_secondary_calibrator_select
+        )
+        original_delay_menu.config(font=self.font)
+        original_delay_menu.pack(padx=5, pady=5)
+
+        label_info = tk.Label(right_calibrator_frame, text="secondary\n-- calibrator --\nadjust",
+                              font=self.font, anchor="center", justify="center")
+        label_info.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+
+        calibrator_frame = tk.Frame(right_calibrator_frame)
+        calibrator_frame.grid(row=1, column=0, padx=5, pady=5, sticky="nsew")
+        calibrator_frame.grid_propagate(False)
+        calibrator_canvas = tk.Canvas(calibrator_frame, highlightthickness=0)
+        calibrator_scrollbar = tk.Scrollbar(calibrator_frame, orient="vertical", command=calibrator_canvas.yview)
+        calibrator_canvas.configure(yscrollcommand=calibrator_scrollbar.set)
+        calibrator_scrollbar.pack(side="right", fill="y")
+        calibrator_canvas.pack(side="left", fill="both", expand=True)
+        calibrator_list_frame = tk.Frame(calibrator_canvas)
+        calibrator_window = calibrator_canvas.create_window((0, 0), window=calibrator_list_frame, anchor="nw")
+
+        def _on_calibrator_frame_configure(_event):
+            calibrator_canvas.configure(scrollregion=calibrator_canvas.bbox("all"))
+
+        def _on_calibrator_canvas_configure(event):
+            calibrator_canvas.itemconfigure(calibrator_window, width=event.width)
+
+        calibrator_list_frame.bind("<Configure>", _on_calibrator_frame_configure)
+        calibrator_canvas.bind("<Configure>", _on_calibrator_canvas_configure)
+
         self.calibrator_toggle_var = [tk.BooleanVar(value=False) for _ in range(len(self.secondary_calibrators))]
         self.calibrator_adjust = []
         for i, item in enumerate(self.secondary_calibrators):
-            calibrator_toggle = tk.Checkbutton(self.lower_frames[1], text=item.name, font=self.font,
-                                               variable=self.calibrator_toggle_var[i],
+            calibrator_toggle = tk.Checkbutton(calibrator_list_frame, text=item.name, font=self.font,
+                                               variable=self.calibrator_toggle_var[i], anchor="w",
+                                               justify="left", wraplength=180,
                                                command=lambda j=i: self.on_calibrator_toggle(j))
-            row = i // 2
-            col = i % 2
-            calibrator_toggle.grid(in_=calibrator_frame, row=row, column=col, padx=5, pady=5, sticky="w")
-
-        self.lower_frames[0].grid_columnconfigure(0, weight=1)
-        self.lower_frames[0].grid_rowconfigure(0, weight=1)
-        self.present_position_fig = None
-        self.position_plot()
+            calibrator_toggle.grid(row=i, column=0, padx=5, pady=5, sticky="w")
 
         self.lower_frames[2].grid_columnconfigure(0, weight=1)
         self.lower_frames[2].grid_columnconfigure(1, weight=1)
@@ -158,6 +205,10 @@ class AdjustWindow:
     def on_if_change(self):
         self.delay_plot()
         self.root.root_normal_vector_plot()
+
+    def on_secondary_calibrator_select(self, label):
+        self.selected_original_delay_id = self.secondary_calibrator_label_to_id.get(label)
+        self.delay_plot()
 
     def on_calibrator_toggle(self, num):
         if self.calibrator_toggle_var[num].get():
@@ -283,7 +334,7 @@ class AdjustWindow:
         if self.present_phase_fig is not None:
             plt.close(self.present_phase_fig)
 
-        fig = self.antenna.plot_delay(self.target_relative_position, self.get_selected_if_id())
+        fig = self.antenna.plot_delay(self.target_relative_position, self.get_selected_if_id(), self.selected_original_delay_id)
         ax = fig.axes[0] if fig.axes else None
         if ax is not None and self.y_limits is not None:
             ax.set_ylim(*self.y_limits)

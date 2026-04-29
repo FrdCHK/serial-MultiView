@@ -48,8 +48,8 @@ class RootWindow:
 
         self.root = tk.Tk()
         self.root.title("PLOT")
-        self.root.geometry("600x560+0+60")
-        self.root.minsize(width=600, height=560)
+        self.root.geometry("532x560+67+60")
+        self.root.minsize(width=532, height=560)
 
         self.font = font.Font(family="Consolas", size=16)
 
