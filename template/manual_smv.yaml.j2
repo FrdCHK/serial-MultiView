@@ -1,0 +1,41 @@
+{# For manually export SN for serial MultiView (sMV) #}
+config:
+{% for key in config.keys() %}
+{% if config[key] == '' %}
+  {{ key }}: ''
+{% else %}
+  {{ key }}: {{ config[key] }}
+{% endif %}
+{% endfor %}
+plugins:
+  - name: AipsCatalog
+    params: {}
+  - name: AipsInit
+    params:
+      userno: {{ userno }}
+  - name: GetObsInfo
+    params:
+      inname: {{ inname }}
+      inclass: {{ inclass }}
+      indisk: {{ indisk }}
+      inseq: {{ inseq }}
+  - name: ManualTargetConstruct
+    params: {}
+  - name: MVSnExport
+    params:
+      indisk: {{ indisk }}
+      manual: True
+  - name: MVRun
+    params:
+      max_depth: {{ max_depth }}
+      max_ang_v: {{ max_ang_v }}
+      min_z: {{ min_z }}
+      weight: {{ weight }}
+      kalman_factor: {{ kalman_factor }}
+      smo_half_window: {{ smo_half_window }}
+  - name: MVPostProcess
+    params:
+      indisk: {{ indisk }}
+      manual: True
+  - name: Exit
+    params: {}

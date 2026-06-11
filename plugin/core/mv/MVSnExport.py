@@ -30,7 +30,6 @@ class MVSnExport(Plugin):
             return False
 
         workspace_dir = context.get_context()["config"]["workspace"]
-        indisk = int(self.params["indisk"])
 
         for target in context.get_context().get("targets"):
             primary = target.get("primary_calibrator") or target.get("PRIMARY_CALIBRATOR")
@@ -46,41 +45,46 @@ class MVSnExport(Plugin):
             sn_dir = os.path.join(mv_dir, "SN")
             os.makedirs(sn_dir, exist_ok=True)
 
-            params_target: Dict[str, Any] = {"in_cat_ident": f"{target['NAME']} WITH CALIBRATORS"}
-            if not context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, params_target):
-                params_target = {"in_cat_ident": f"{target['NAME']}"}
+            if self.params.get("manual", False):
+                uv = AIPSUVData(target["INNAME"], target["INCLASS"], int(target["INDISK"]), int(target["INSEQ"]))
+            else:
+                params_target: Dict[str, Any] = {"in_cat_ident": f"{target['NAME']} WITH CALIBRATORS"}
                 if not context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, params_target):
-                    context.logger.error(f"Target SPLAT catalog not found for {target['NAME']}")
-                    return False
-
-            splat_uv = AIPSUVData(target["NAME"], "SPLAT", indisk, int(params_target["inseq"]))
+                    params_target = {"in_cat_ident": f"{target['NAME']}"}
+                    if not context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, params_target):
+                        context.logger.error(f"Target SPLAT catalog not found for {target['NAME']}")
+                        return False
+                uv = AIPSUVData(target["NAME"], "SPLAT", int(self.params["indisk"]), int(params_target["inseq"]))
+            
             calibrators = target.get("CALIBRATORS", [])
             for calibrator in calibrators:
                 if int(calibrator["ID"]) == primary_id:
                     continue
-                sn_sources = [f"FRING({calibrator['NAME']} STRUC)", f"FRING({calibrator['NAME']})"]
-                ext = {"status": False}
-                sn_source = ""
-                for source in sn_sources:
-                    ext = context.get_context()["loaded_plugins"]["AipsCatalog"].search_ext(
-                        context,
-                        target["NAME"],
-                        "SPLAT",
-                        indisk,
-                        int(params_target["inseq"]),
-                        "SN",
-                        ext_source=source,
-                    )
-                    if ext["status"]:
-                        sn_source = source
-                        break
-                if not ext["status"]:
-                    context.logger.error(f"SN table not found for calibrator {calibrator['NAME']} on target {target['NAME']}")
-                    return False
-                snver = context.get_context()["aips_catalog"][ext["cat_index"]]["ext"][ext["ext_index"]]["version"][ext["ver_index"]]["num"]
-                calibrator["SN"] = int(snver)
+                
+                if not self.params.get("manual", True):
+                    sn_sources = [f"FRING({calibrator['NAME']} STRUC)", f"FRING({calibrator['NAME']})"]
+                    ext = {"status": False}
+                    sn_source = ""
+                    for source in sn_sources:
+                        ext = context.get_context()["loaded_plugins"]["AipsCatalog"].search_ext(
+                            context,
+                            target["NAME"],
+                            "SPLAT",
+                            int(self.params["indisk"]),
+                            int(params_target["inseq"]),
+                            "SN",
+                            ext_source=source,
+                        )
+                        if ext["status"]:
+                            sn_source = source
+                            break
+                    if not ext["status"]:
+                        context.logger.error(f"SN table not found for calibrator {calibrator['NAME']} on target {target['NAME']}")
+                        return False
+                    snver = context.get_context()["aips_catalog"][ext["cat_index"]]["ext"][ext["ext_index"]]["version"][ext["ver_index"]]["num"]
+                    calibrator["SN"] = int(snver)
 
-                sn_table = splat_uv.table("SN", int(snver))
+                sn_table = uv.table("SN", calibrator["SN"])
                 phase_column = [f"p{if_id}" for if_id in range(context.get_context()["no_if"])]
                 delay_column = [f"d{if_id}" for if_id in range(context.get_context()["no_if"])]
                 rate_column = [f"r{if_id}" for if_id in range(context.get_context()["no_if"])]
@@ -92,9 +96,12 @@ class MVSnExport(Plugin):
                     rate = [row_sn.rate_1[if_id] for if_id in range(no_if)]
                     mbdelay = row_sn.mbdelay1
                     sn_df.loc[sn_df.index.size] = [row_sn.time, row_sn.antenna_no, row_sn.source_id, mbdelay] + phase + delay + rate
-                sn_path = os.path.join(sn_dir, f"{target['ID']}-{target['NAME']}-SN{snver}.csv")
+                sn_path = os.path.join(sn_dir, f"{target['ID']}-{target['NAME']}-SN{calibrator['SN']}.csv")
                 sn_df.to_csv(sn_path, index=False)
-                context.logger.info(f"SN{snver}({sn_source}) for {target['NAME']} exported")
+                if self.params.get("manual", False):
+                    context.logger.info(f"SN{calibrator['SN']} for {target['NAME']} exported")
+                else:
+                    context.logger.info(f"SN{calibrator['SN']}({sn_source}) for {target['NAME']} exported")
 
             target_conf = {
                 "PRIMARY_CALIBRATOR": primary,

@@ -67,41 +67,48 @@ class MVPostProcess(Plugin):
             if not antennas_exclude.empty:
                 context.logger.debug(f"Excluded antennas for {target['NAME']}: {antennas_exclude['NAME'].tolist()}")
 
-            params_target = {"in_cat_ident": f"{target['NAME']} WITH CALIBRATORS"}
-            if not context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, params_target):
-                context.logger.error(f"Target SPLAT catalog not found for {target['NAME']}")
-                return False
-            context.logger.debug(f"SPLAT catalog seq for {target['NAME']}: {params_target['inseq']}")
 
-            splat = WizAIPSData(target["NAME"], "SPLAT", indisk, int(params_target["inseq"]))
-            primary_sn_sources = [f"FRING({primary['NAME']} STRUC)", f"FRING({primary['NAME']})"]
-            ext = {"status": False}
-            primary_sn_src = ""
-            for source in primary_sn_sources:
-                ext = context.get_context()["loaded_plugins"]["AipsCatalog"].search_ext(
-                    context,
-                    target["NAME"],
-                    "SPLAT",
-                    indisk,
-                    int(params_target["inseq"]),
-                    "SN",
-                    ext_source=source,
-                )
-                if ext["status"]:
-                    primary_sn_src = source
-                    break
-            if not ext["status"]:
-                context.logger.error(f"Primary SN table not found for target {target['NAME']}")
-                return False
-            primary_snver = context.get_context()["aips_catalog"][ext["cat_index"]]["ext"][ext["ext_index"]]["version"][ext["ver_index"]]["num"]
-            context.logger.debug(f"Primary SN version for {target['NAME']}: {primary_snver}")
-            sn0 = splat.table("SN", int(primary_snver))
+            if self.params.get("manual", False):
+                uv = WizAIPSData(target["INNAME"], target["INCLASS"], int(target["INDISK"]), int(target["INSEQ"]))
+                primary_snver = target["primary_calibrator"].get("SN")
+            else:
+                params_target = {"in_cat_ident": f"{target['NAME']} WITH CALIBRATORS"}
+                if not context.get_context()["loaded_plugins"]["AipsCatalog"].ident2cat(context, params_target):
+                    context.logger.error(f"Target SPLAT catalog not found for {target['NAME']}")
+                    return False
+                inseq = int(params_target["inseq"])
+                context.logger.debug(f"SPLAT catalog seq for {target['NAME']}: {inseq}")
+                uv = WizAIPSData(target["NAME"], "SPLAT", indisk, inseq)
+                primary_sn_sources = [f"FRING({primary['NAME']} STRUC)", f"FRING({primary['NAME']})"]
+                ext = {"status": False}
+                # primary_sn_src = ""
+                for source in primary_sn_sources:
+                    ext = context.get_context()["loaded_plugins"]["AipsCatalog"].search_ext(
+                        context,
+                        target["NAME"],
+                        "SPLAT",
+                        indisk,
+                        inseq,
+                        "SN",
+                        ext_source=source,
+                    )
+                    if ext["status"]:
+                        # primary_sn_src = source
+                        break
+                if not ext["status"]:
+                    context.logger.error(f"Primary SN table not found for target {target['NAME']}")
+                    return False
+                primary_snver = context.get_context()["aips_catalog"][ext["cat_index"]]["ext"][ext["ext_index"]]["version"][ext["ver_index"]]["num"]
+                context.logger.debug(f"Primary SN version for {target['NAME']}: {primary_snver}")
+            sn0 = uv.table("SN", int(primary_snver))
 
-            mv_snver = context.get_context()["loaded_plugins"]["AipsCatalog"].get_highest_ext_ver(
-                context, target["NAME"], "SPLAT", indisk, int(params_target["inseq"]), "SN"
-            ) + 1
+            if self.params.get("manual", False):
+                mv_snver = target.get("SN_MV")
+            else:
+                mv_snver = context.get_context()["loaded_plugins"]["AipsCatalog"].get_highest_ext_ver(
+                    context, target["NAME"], "SPLAT", indisk, inseq, "SN") + 1
             context.logger.debug(f"New MV SN version for {target['NAME']}: {mv_snver}")
-            sn_mv = splat.attach_table("SN", int(mv_snver))
+            sn_mv = uv.attach_table("SN", int(mv_snver))
 
             mv_data_dir = os.path.join(mv_dir, f"{target['ID']}-{target['NAME']}-MV")
             mv_delay_cache = {}
@@ -184,20 +191,23 @@ class MVPostProcess(Plugin):
                 f"SN rows appended: {appended_rows}; skipped ref_ant={skipped_refant}, "
                 f"excluded={skipped_excluded}, missing_conf={skipped_missing_conf}, missing_delay={skipped_missing_delay}"
             )
-
             sn0.close()
             sn_mv.close()
+            context.logger.info(f"MultiView SN{mv_snver} for {target['NAME']} imported to AIPS")
+
+            if self.params.get("manual", False):
+                continue
+            
             context.get_context()["loaded_plugins"]["AipsCatalog"].add_ext(
                 context,
                 target["NAME"],
                 "SPLAT",
                 indisk,
-                int(params_target["inseq"]),
+                inseq,
                 "SN",
                 ext_version=int(mv_snver),
                 ext_source="MV",
             )
-            context.logger.info(f"MultiView SN{mv_snver} for {target['NAME']} imported to AIPS")
 
             # CLCAL with MV SN
             context.logger.info(f"CLCAL(MV) for {target['NAME']}")
@@ -227,7 +237,7 @@ class MVPostProcess(Plugin):
                     target["NAME"],
                     "SPLAT",
                     indisk,
-                    int(params_target["inseq"]),
+                    inseq,
                     "CL",
                     ext_source=source,
                 )
