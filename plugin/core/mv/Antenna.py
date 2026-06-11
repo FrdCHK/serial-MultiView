@@ -286,7 +286,7 @@ class Antenna:
     def plot_delay(self, target_pos, if_id=0, original_delay_id=None):
         self.target_pos = target_pos
         self._refresh_delay_target_series()
-        markers = ['o', 'd', '^', 's', 'v', 'p', '*', '8', '<', '>']
+        markers = ['o', 'd', '^', 's', 'v', 'p', 'h', '*', '8', '<', '>', 'H', 'D', 'X', 'P']
         fig, ax = plt.subplots(1, 1, figsize=(8, 3))
         fig.subplots_adjust(left=0.05, right=0.95, top=0.98, bottom=0.12)
 
