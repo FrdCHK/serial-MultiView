@@ -177,7 +177,10 @@ class AdjustWindow:
         t_unflag_button.grid(row=2, column=1, padx=5, pady=5)
         reset_button = tk.Button(self.lower_frames[2], height=2, width=10, text="reset", font=self.font,
                                  command=self.on_reset)
-        reset_button.grid(row=3, column=0, columnspan=2, padx=5, pady=5)
+        reset_button.grid(row=3, column=1, padx=5, pady=5)
+        apply_all_button = tk.Button(self.lower_frames[2], height=2, width=10, text="all IFs", font=self.font,
+                                     command=self.on_apply_all)
+        apply_all_button.grid(row=3, column=0, padx=5, pady=5)
 
         label_ylim = tk.Label(self.lower_frames[2], text="-- y limit (ps) --", width=18, font=self.font, anchor="center")
         label_ylim.grid(row=4, column=0, columnspan=2, padx=5, pady=5)
@@ -263,7 +266,12 @@ class AdjustWindow:
 
     def on_flag(self, mode):
         if (self.timerange_start is not None) and (self.timerange_end is not None):
-            self.antenna.delay_flag([self.timerange_start, self.timerange_end], self.calibrator_adjust, mode)
+            self.antenna.delay_flag_if(
+                [self.timerange_start, self.timerange_end],
+                self.calibrator_adjust,
+                self.get_selected_if_id(),
+                mode,
+            )
             self.delay_plot()
             # self.root.rerun(False)
 
@@ -274,6 +282,10 @@ class AdjustWindow:
 
     def on_reset(self):
         self.antenna.delay_reset()
+        self.root.rerun()
+
+    def on_apply_all(self):
+        self.antenna.delay_apply_manual_to_all(self.get_selected_if_id())
         self.root.rerun()
 
     def on_ylim_apply(self):

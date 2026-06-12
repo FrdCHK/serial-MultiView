@@ -56,12 +56,12 @@ class Antenna:
 
         self.delay_if_ids = list(range(int(no_if)))
         self.if_freq = self._normalize_if_freq(if_freq, self.delay_if_ids)
-        delay_adjust_columns = ['flag'] + [f'w{if_id}' for if_id in self.delay_if_ids]
+        delay_adjust_columns = [f'flag{if_id}' for if_id in self.delay_if_ids] + [f'w{if_id}' for if_id in self.delay_if_ids]
         self.delay_adjust_info = pd.DataFrame(
             data=np.zeros(shape=(self.original_data.index.size, len(delay_adjust_columns))),
             columns=delay_adjust_columns,
         )
-        dtype_map = {'flag': int}
+        dtype_map = {f'flag{if_id}': int for if_id in self.delay_if_ids}
         dtype_map.update({f'w{if_id}': int for if_id in self.delay_if_ids})
         self.delay_adjust_info = self.delay_adjust_info.astype(dtype_map)
         self.delay_auto_adjust_info = pd.DataFrame(
@@ -104,6 +104,13 @@ class Antenna:
             else:
                 out[if_id] = 1.0
         return out
+
+    def _flag_col(self, if_id):
+        return f'flag{if_id}'
+
+    def _wrap_col(self, if_id):
+        return f'w{if_id}'
+
     def delay_multiview(self, max_depth=4, max_ang_v=864., min_z=0.67, weight=1., kalman_factor=0.08, smo_half_window=None):
         """
         Solve total delay per IF independently, then average the solved target delay.
@@ -126,10 +133,11 @@ class Antenna:
             return
 
         extend_length = 10
-        data_extended = self._get_extended_delay_data(extend_length)
         delay_results = {}
         delay_target_if = {}
         for if_id in self.delay_if_ids:
+            self.update_delay_data(if_id)
+            data_extended = self._get_extended_delay_data(extend_length)
             data_extended_corrected = self._correct_delay_with_phase(data_extended, if_id)
             data_view = data_extended_corrected[['calsour', 'x', 'y', 't', 'total_delay']].copy(deep=True)
             data_view['total_delay'] = data_view['total_delay'] * self.z_scale  # for numerical stability
@@ -206,19 +214,25 @@ class Antenna:
         self._refresh_delay_target_series()
 
     def delay_flag(self, timerange, calibrators, mode='flag'):
+        return self.delay_flag_if(timerange, calibrators, 0, mode)
+
+    def delay_flag_if(self, timerange, calibrators, if_id, mode='flag'):
         flag_index = (self.original_data['t'] >= timerange[0]) & (self.original_data['t'] <= timerange[1])
         calibrator_index = self.original_data['calsour'].isin(calibrators)
         criteria_index = flag_index & calibrator_index
+        flag_col = self._flag_col(if_id)
+        if flag_col not in self.delay_adjust_info.columns:
+            return
         if mode == 'flag':
-            self.delay_adjust_info.loc[criteria_index, 'flag'] = 1
+            self.delay_adjust_info.loc[criteria_index, flag_col] = 1
         elif mode == 'unflag':
-            self.delay_adjust_info.loc[criteria_index, 'flag'] = 0
+            self.delay_adjust_info.loc[criteria_index, flag_col] = 0
         else:
             raise ValueError('available modes are: flag, unflag')
-        self.update_delay_data()
+        self.update_delay_data(if_id)
 
     def delay_wrap(self, timerange, calibrators, if_id, mode='+', source='manual'):
-        wrap_col = f'w{if_id}'
+        wrap_col = self._wrap_col(if_id)
         target_info = self.delay_adjust_info if source == 'manual' else self.delay_auto_adjust_info
         if wrap_col not in target_info.columns:
             return
@@ -231,7 +245,17 @@ class Antenna:
             target_info.loc[criteria_index, wrap_col] -= 1
         else:
             raise ValueError('available modes are: +, -')
-        self.update_delay_data()
+        self.update_delay_data(if_id)
+
+    def delay_apply_manual_to_all(self, if_id):
+        src_flag_col = self._flag_col(if_id)
+        src_wrap_col = self._wrap_col(if_id)
+        if src_flag_col not in self.delay_adjust_info.columns or src_wrap_col not in self.delay_adjust_info.columns:
+            return
+        for other_if in self.delay_if_ids:
+            self.delay_adjust_info[self._flag_col(other_if)] = self.delay_adjust_info[src_flag_col].to_numpy()
+            self.delay_adjust_info[self._wrap_col(other_if)] = self.delay_adjust_info[src_wrap_col].to_numpy()
+        self.update_delay_data(if_id)
 
     def delay_t_flag(self, timerange, mode='flag'):
         if mode == 'flag':
@@ -294,14 +318,15 @@ class Antenna:
         self.delay_adjust_info.iloc[:, :] = 0
         self.delay_auto_adjust_info.iloc[:, :] = 0
         self.delay_t_flag_info = []
-        self.update_delay_data()
+        self.update_delay_data(self.delay_if_ids[0] if self.delay_if_ids else 0)
 
     def delay_auto_reset(self):
         self.delay_auto_adjust_info.iloc[:, :] = 0
-        self.update_delay_data()
+        self.update_delay_data(self.delay_if_ids[0] if self.delay_if_ids else 0)
 
     def plot_delay(self, target_pos, if_id=0, original_delay_id=None):
         self.target_pos = target_pos
+        self.update_delay_data(if_id)
         self._refresh_delay_target_series()
         markers = ['o', 'd', '^', 's', 'v', 'p', 'h', '*', '8', '<', '>', 'H', 'D', 'X', 'P']
         fig, ax = plt.subplots(1, 1, figsize=(8, 3))
@@ -317,7 +342,7 @@ class Antenna:
             if not plot_data.empty:
                 ax.plot(plot_data['t'], plot_data["total_delay"] * 1e12, ls='none', marker=markers[i], c=self.colors[i], label=item.name)
 
-        flagged_index = self.delay_adjust_info['flag'] == 1
+        flagged_index = self.delay_adjust_info[self._flag_col(if_id)] == 1
         flagged_data = self.original_data.loc[flagged_index].copy(deep=True)
         flagged_data.reset_index(drop=True, inplace=True)
         for i, item in enumerate(self.secondary_calibrators):
@@ -362,27 +387,36 @@ class Antenna:
         #             detail_table[f'd{if_id}'] = self.delay_target_if[if_id]
         #     detail_table.to_csv(detail_path, index=False)
 
-    def update_delay_data(self):
+    def update_delay_data(self, if_id=0):
+        self.update_delay_data_if(if_id)
+
+    def update_delay_data_if(self, if_id):
         self.data = self.original_data.copy(deep=True)
         if self.data.empty:
             return
-        combined_adjust = self.delay_adjust_info.copy(deep=True)
+        flag_col = self._flag_col(if_id)
+        wrap_col = self._wrap_col(if_id)
+        if flag_col not in self.delay_adjust_info.columns or wrap_col not in self.delay_adjust_info.columns:
+            return
+        combined_adjust = pd.DataFrame(index=self.delay_adjust_info.index)
+        combined_adjust[flag_col] = self.delay_adjust_info[flag_col].astype(int)
+        combined_adjust[wrap_col] = self.delay_adjust_info[wrap_col].astype(int)
         if not self.delay_auto_adjust_info.empty:
-            combined_adjust = combined_adjust.add(self.delay_auto_adjust_info, fill_value=0)
-        combined_adjust = combined_adjust.astype(self.delay_adjust_info.dtypes.to_dict())
+            if flag_col in self.delay_auto_adjust_info.columns:
+                combined_adjust[flag_col] = combined_adjust[flag_col] + self.delay_auto_adjust_info[flag_col].fillna(0).astype(int)
+            if wrap_col in self.delay_auto_adjust_info.columns:
+                combined_adjust[wrap_col] = combined_adjust[wrap_col] + self.delay_auto_adjust_info[wrap_col].fillna(0).astype(int)
         # for if_id in self.delay_if_ids:
         #     phase_col = f'p{if_id}'
         #     delay_col = f'd{if_id}'
         #     if phase_col in self.data.columns and delay_col in self.data.columns:
         #         freq_hz = self.if_freq.get(if_id, 1.0) * 1e9
         #         self.data[delay_col] = self.data[delay_col] - self.data[phase_col] / (2 * np.pi * freq_hz)
-        for if_id in self.delay_if_ids:
-            wrap_col = f'w{if_id}'
-            delay_col = f'd{if_id}'
-            if wrap_col in combined_adjust.columns and delay_col in self.data.columns:
-                wrap_step = 1.0 / (self.if_freq.get(if_id, 1.0) * 1e9)
-                self.data[delay_col] += combined_adjust[wrap_col].to_numpy() * wrap_step
-        non_flagged_index = combined_adjust['flag'] == 0
+        delay_col = f'd{if_id}'
+        if delay_col in self.data.columns:
+            wrap_step = 1.0 / (self.if_freq.get(if_id, 1.0) * 1e9)
+            self.data[delay_col] += combined_adjust[wrap_col].to_numpy() * wrap_step
+        non_flagged_index = combined_adjust[flag_col] == 0
         self.data = self.data.loc[non_flagged_index]
         self.data.reset_index(drop=True, inplace=True)
 

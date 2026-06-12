@@ -144,10 +144,19 @@ class RootWindow:
                 self.config[key] = value
         if os.path.isfile(self.delay_adj_dir):
             delay_adjust_load = pd.read_csv(self.delay_adj_dir)
-            common_cols = [col for col in delay_adjust_load.columns if col in self.antenna.delay_adjust_info.columns]
-            for col in common_cols:
-                self.antenna.delay_adjust_info.loc[:delay_adjust_load.index.size - 1, col] = delay_adjust_load[col]
-            self.antenna.update_delay_data()
+            manual_df = self.antenna.delay_adjust_info.copy(deep=True)
+            if "flag" in delay_adjust_load.columns:
+                for if_id in self.antenna.delay_if_ids:
+                    manual_df[self.antenna._flag_col(if_id)] = delay_adjust_load["flag"].to_numpy()
+            for if_id in self.antenna.delay_if_ids:
+                flag_col = self.antenna._flag_col(if_id)
+                wrap_col = self.antenna._wrap_col(if_id)
+                if flag_col in delay_adjust_load.columns:
+                    manual_df[flag_col] = delay_adjust_load[flag_col].to_numpy()
+                if wrap_col in delay_adjust_load.columns:
+                    manual_df[wrap_col] = delay_adjust_load[wrap_col].to_numpy()
+            self.antenna.delay_adjust_info.loc[:delay_adjust_load.index.size - 1, manual_df.columns] = manual_df.loc[:delay_adjust_load.index.size - 1, manual_df.columns]
+            self.antenna.update_delay_data(self.antenna.delay_if_ids[0] if self.antenna.delay_if_ids else 0)
         if 'reverse' in config_load.keys():
             self.antenna.reverse = config_load['reverse']
         if 't_flag' in config_load.keys():
