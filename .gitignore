@@ -9,4 +9,4 @@ pytest.ini
 *.log_*
 !log/.gitkeep
 .codex
-codex.md
+AGENTS.md
