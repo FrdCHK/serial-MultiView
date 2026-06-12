@@ -251,7 +251,13 @@ class AdjustWindow:
 
     def on_wrap(self, mode):
         if (self.timerange_start is not None) and (self.timerange_end is not None):
-            self.antenna.delay_wrap([self.timerange_start, self.timerange_end], self.calibrator_adjust, self.get_selected_if_id(), mode)
+            self.antenna.delay_wrap(
+                [self.timerange_start, self.timerange_end],
+                self.calibrator_adjust,
+                self.get_selected_if_id(),
+                mode,
+                source='manual',
+            )
             self.delay_plot()
             # self.root.rerun(False)
 

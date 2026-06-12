@@ -137,6 +137,7 @@ class RootWindow:
             self.adjust_window.delay_plot()
 
     def load(self, do_rerun=True):
+        self.antenna.delay_auto_reset()
         with open(self.conf_dir, 'r') as f:
             config_load = yaml.safe_load(f) or {}
             for key, value in config_load.items():

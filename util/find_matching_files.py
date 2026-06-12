@@ -8,7 +8,9 @@ import os
 
 
 def find_matching_files(directory, prefix='', suffix='CONF', ext='yaml'):
-    pattern = re.compile(rf'{prefix}-(\d+)-([A-Za-z]{{2}})-{suffix}\.{ext}')
+    pattern = re.compile(
+        rf'^{re.escape(prefix)}-(\d+)-(.+?)-{re.escape(suffix)}\.{re.escape(ext)}$'
+    )
     matching_files = []
     for filename in os.listdir(directory):
         match = pattern.match(filename)
