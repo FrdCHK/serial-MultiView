@@ -12,6 +12,7 @@ from matplotlib import rc
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from .Antenna import Antenna
+from .Slice3DWindow import Slice3DWindow
 
 
 class AdjustWindow:
@@ -55,6 +56,7 @@ class AdjustWindow:
         self.timerange_end = None
         self.fill = None
         self.y_limits = None
+        self.slice_window = None
 
         self.frames[1].grid_rowconfigure(0, weight=1)
         self.frames[1].grid_columnconfigure(0, weight=18, minsize=300)
@@ -86,6 +88,9 @@ class AdjustWindow:
         right_calibrator_frame.grid_propagate(False)
         right_calibrator_frame.grid_rowconfigure(1, weight=1)
         right_calibrator_frame.grid_columnconfigure(0, weight=1)
+
+        slice_button = tk.Button(left_controls_frame, text="3D slice", font=self.font, command=self.open_slice_window)
+        slice_button.pack(padx=5, pady=5, fill="x")
 
         self.reverse_toggle = tk.BooleanVar(value=bool(self.antenna.reverse))
         reverse_toggle = tk.Checkbutton(left_controls_frame, text="reverse", font=self.font,
@@ -208,6 +213,8 @@ class AdjustWindow:
     def on_if_change(self):
         self.delay_plot()
         self.root.root_normal_vector_plot()
+        if self.slice_window is not None:
+            self.slice_window.refresh()
 
     def on_secondary_calibrator_select(self, label):
         self.selected_original_delay_id = self.secondary_calibrator_label_to_id.get(label)
@@ -283,6 +290,28 @@ class AdjustWindow:
     def on_reset(self):
         self.antenna.delay_reset()
         self.root.rerun()
+
+    def open_slice_window(self):
+        if self.slice_window is not None:
+            try:
+                self.slice_window.window.lift()
+                self.slice_window.window.focus_force()
+                self.slice_window.refresh()
+                return
+            except Exception:
+                self.slice_window = None
+        self.slice_window = Slice3DWindow(
+            self.root,
+            self.antenna,
+            self.target,
+            self.primary,
+            self.secondary_calibrators,
+            self.get_selected_if_id,
+            on_close=self._on_slice_window_close,
+        )
+
+    def _on_slice_window_close(self):
+        self.slice_window = None
 
     def on_apply_all(self):
         self.antenna.delay_apply_manual_to_all(self.get_selected_if_id())

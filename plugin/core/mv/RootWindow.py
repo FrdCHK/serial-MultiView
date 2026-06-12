@@ -135,6 +135,8 @@ class RootWindow:
         self.root_normal_vector_plot()
         if adjust and self.adjust_window is not None:
             self.adjust_window.delay_plot()
+            if getattr(self.adjust_window, "slice_window", None) is not None:
+                self.adjust_window.slice_window.refresh()
 
     def load(self, do_rerun=True):
         self.antenna.delay_auto_reset()
