@@ -3,7 +3,7 @@ class for calibrators
 @Author: Jingdong Zhang
 @DATE  : 2024/7/17
 """
-from astropy.coordinates import Angle
+from astropy.coordinates import SkyCoord
 from astropy import units as u
 
 
@@ -19,11 +19,8 @@ class Calibrator:
         self.dy = 0.
 
     def calc_relative_position(self, pri_ra, pri_dec):
-        lon = Angle(self.ra, unit=u.deg)
-        lat = Angle(self.dec, unit=u.deg)
-        lon_pri = Angle(pri_ra, unit=u.deg)
-        lat_pri = Angle(pri_dec, unit=u.deg)
-        ref_lon = lon - lon_pri
-        ref_lat = lat - lat_pri
-        self.dx = ref_lon.deg
-        self.dy = ref_lat.deg
+        this_coord = SkyCoord(self.ra, self.dec, unit=u.deg, frame='icrs')
+        pri_coord = SkyCoord(pri_ra, pri_dec, unit=u.deg, frame='icrs')
+        dx, dy = this_coord.spherical_offsets_to(pri_coord)
+        self.dx = dx.deg
+        self.dy = dy.deg

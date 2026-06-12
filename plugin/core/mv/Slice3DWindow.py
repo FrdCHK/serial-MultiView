@@ -6,6 +6,8 @@ import tkinter as tk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.widgets import RangeSlider
+from astropy.coordinates import SkyCoord
+from astropy import units as u
 
 from .plane import plane
 from .Antenna import Antenna
@@ -22,8 +24,11 @@ class Slice3DWindow:
         self.on_close = on_close
         self.delay_display_scale = 1e12
         self.target_color = "#A52C2C"
-        self.target_x = float(self.target["RA"]) - float(self.primary["RA"])
-        self.target_y = float(self.target["DEC"]) - float(self.primary["DEC"])
+        target_coord = SkyCoord(self.target["RA"], self.target["DEC"], unit=u.deg, frame='icrs')
+        pri_coord = SkyCoord(self.primary["RA"], self.primary["DEC"], unit=u.deg, frame='icrs')
+        dx, dy = target_coord.spherical_offsets_to(pri_coord)
+        self.target_x = dx.deg
+        self.target_y = dy.deg
 
         self.window = tk.Toplevel(parent.root)
         self.window.title("3D slice")
