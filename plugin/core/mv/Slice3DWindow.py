@@ -200,21 +200,35 @@ class Slice3DWindow:
         normal = self._get_center_normal(if_id, slice_range)
         target_z = 0.0
         if normal is not None:
-            target_z = plane(normal[0], normal[1], normal[2], self.target_x, self.target_y)
+            scale_ratio = self.antenna.z_scale / self.delay_display_scale if self.delay_display_scale != 0 else 1.0
+            target_z = plane(normal[0], normal[1], normal[2] * scale_ratio, self.target_x, self.target_y)
         self.ax.scatter(self.target_x, self.target_y, target_z, marker="^", s=70, c=self.target_color, label=self.target["NAME"])
         X, Y, Z = self._build_plane(normal, np.asarray(x_vals), np.asarray(y_vals))
         if X is not None and Y is not None and Z is not None:
             self.ax.plot_surface(X, Y, Z, color="#7A9CC6", alpha=0.25, linewidth=0, antialiased=True)
 
         if z_vals:
-            self.ax.plot(
-                [self.target_x, self.target_x],
-                [self.target_y, self.target_y],
-                [min(z_vals), max(z_vals)],
-                color=self.target_color,
-                linewidth=1.0,
-                alpha=0.9,
-            )
+            z_min = min(z_vals)
+            z_max = max(z_vals)
+            if target_z < z_max:
+                self.ax.plot(
+                    [self.target_x, self.target_x],
+                    [self.target_y, self.target_y],
+                    [target_z, z_max],
+                    color=self.target_color,
+                    linewidth=1.0,
+                    alpha=0.9,
+                )
+            if target_z > z_min:
+                self.ax.plot(
+                    [self.target_x, self.target_x],
+                    [self.target_y, self.target_y],
+                    [z_min, target_z],
+                    color=self.target_color,
+                    linewidth=1.0,
+                    alpha=0.9,
+                    linestyle=":",
+                )
 
         x_pad = max(0.05, 0.15 * max(np.ptp(x_vals), 1e-6))
         y_pad = max(0.05, 0.15 * max(np.ptp(y_vals), 1e-6))
@@ -232,8 +246,8 @@ class Slice3DWindow:
         except Exception:
             pass
 
-        self.ax.set_xlabel("Relative RA")
-        self.ax.set_ylabel("Relative DEC")
+        self.ax.set_xlabel("Relative RA (deg)")
+        self.ax.set_ylabel("Relative DEC (deg)")
         self.ax.set_zlabel("Delay (ps)")
         self.ax.set_title(f"3D slice IF{if_id + 1}: {slice_range[0]:.6f} - {slice_range[1]:.6f}")
         self.ax.legend(loc="upper left", fontsize=8)
