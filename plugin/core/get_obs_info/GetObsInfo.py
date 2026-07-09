@@ -15,6 +15,25 @@ class GetObsInfo(Plugin):
         return "Get observation information from catalog. " \
                "Plugins required: AipsCatalog; optional: GeneralTask (if LISTR & PRTAN are needed). " \
                "Parameters required: inname, inclass, inseq, indisk; optional: listr_outprint, listr_optype, prtan_outprint."
+
+    @classmethod
+    def _get_table_value(cls, row, keys):
+        for key in keys:
+            try:
+                return row[key]
+            except Exception:
+                pass
+        return None
+
+    @classmethod
+    def _get_stabxyz(cls, row):
+        stabxyz = cls._get_table_value(row, ["stabxyz", "STABXYZ"])
+        try:
+            if stabxyz is None or len(stabxyz) != 3:
+                return None
+            return [float(value) for value in stabxyz]
+        except Exception:
+            return None
     
     def run(self, context: Context) -> bool:
         context.logger.info(f"Start reading observation information from catalog")
@@ -25,6 +44,29 @@ class GetObsInfo(Plugin):
         data = AIPSUVData(self.params["inname"], self.params["inclass"], int(self.params["indisk"]), int(self.params["inseq"]))
         antennas = data.antennas
         antennas = pd.DataFrame({"ID": range(1, len(antennas) + 1), "NAME": antennas})
+        antennas["X"] = None
+        antennas["Y"] = None
+        antennas["Z"] = None
+
+        an_table = data.table('AIPS AN', 0)
+        an_stabxyz = {}
+        for row_index, an_item in enumerate(an_table):
+            antenna_id = self._get_table_value(an_item, ["nosta", "NOSTA", "antenna_no", "ANTENNA_NO", "id__no", "ID__NO"])
+            if antenna_id is None:
+                antenna_id = row_index + 1
+            try:
+                antenna_id = int(antenna_id)
+            except Exception:
+                context.logger.warning(f"Invalid AN table antenna ID at row {row_index + 1}")
+                continue
+            an_stabxyz[antenna_id] = self._get_stabxyz(an_item)
+
+        for row_index, antenna in antennas.iterrows():
+            stabxyz = an_stabxyz.get(int(antenna["ID"]))
+            if stabxyz is None:
+                context.logger.warning(f"STABXYZ not available for antenna {antenna['ID']} {antenna['NAME']}")
+                continue
+            antennas.loc[row_index, ["X", "Y", "Z"]] = stabxyz
 
         su_table = data.table('AIPS SU', 0)
         sources = pd.DataFrame(columns=["ID", "NAME", "RA", "DEC"])
