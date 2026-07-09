@@ -61,7 +61,7 @@ class MVSnExport(Plugin):
                 if int(calibrator["ID"]) == primary_id:
                     continue
                 
-                if not self.params.get("manual", True):
+                if not self.params.get("manual", False):
                     sn_sources = [f"FRING({calibrator['NAME']} STRUC)", f"FRING({calibrator['NAME']})"]
                     ext = {"status": False}
                     sn_source = ""
