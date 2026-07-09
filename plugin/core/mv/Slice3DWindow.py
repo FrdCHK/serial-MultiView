@@ -6,10 +6,7 @@ import tkinter as tk
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.widgets import RangeSlider
-from astropy.coordinates import SkyCoord
-from astropy import units as u
 
-from .plane import plane
 from .Antenna import Antenna
 
 
@@ -24,11 +21,8 @@ class Slice3DWindow:
         self.on_close = on_close
         self.delay_display_scale = 1e12
         self.target_color = "#A52C2C"
-        target_coord = SkyCoord(self.target["RA"], self.target["DEC"], unit=u.deg, frame='icrs')
-        pri_coord = SkyCoord(self.primary["RA"], self.primary["DEC"], unit=u.deg, frame='icrs')
-        dx, dy = target_coord.spherical_offsets_to(pri_coord)
-        self.target_x = dx.deg
-        self.target_y = dy.deg
+        self.target_x = 0.0
+        self.target_y = 0.0
 
         self.window = tk.Toplevel(parent.root)
         self.window.title("3D slice")
@@ -106,31 +100,22 @@ class Slice3DWindow:
             t0, t1 = t1, t0
         return float(t0), float(t1)
 
-    def _get_center_normal(self, if_id, slice_range):
+    def _get_center_gradient(self, if_id, slice_range):
         mv = self.antenna.delay_mv_result.get(if_id)
-        mv_t = self.antenna.delay_mv_t
+        mv_t = self.antenna.delay_mv_t_by_if.get(if_id, self.antenna.delay_mv_t)
         if mv is None or mv_t is None or len(mv_t) == 0:
             return None
         center_t = 0.5 * (slice_range[0] + slice_range[1])
         idx = int(np.argmin(np.abs(np.asarray(mv_t) - center_t)))
         if idx < 0 or idx >= len(mv):
             return None
-        normal = np.asarray(mv[idx]).reshape(-1)
-        if normal.size < 3:
+        gradient = np.asarray(mv[idx]).reshape(-1)
+        if gradient.size < 2:
             return None
-        norm = np.array(normal[:3], dtype=float)
-        nrm = np.linalg.norm(norm)
-        if nrm == 0:
-            return None
-        return norm / nrm
+        return np.array(gradient[:2], dtype=float)
 
-    def _build_plane(self, normal, x_vals, y_vals):
-        if normal is None:
-            return None, None, None
-        # Convert the solver's delay scale to the displayed delay scale.
-        scale_ratio = self.antenna.z_scale / self.delay_display_scale if self.delay_display_scale != 0 else 1.0
-        nz = float(normal[2]) * scale_ratio
-        if abs(nz) < 1e-12:
+    def _build_plane(self, gradient, x_vals, y_vals):
+        if gradient is None:
             return None, None, None
         x_min, x_max = float(np.min(x_vals)), float(np.max(x_vals))
         y_min, y_max = float(np.min(y_vals)), float(np.max(y_vals))
@@ -139,7 +124,7 @@ class Slice3DWindow:
         x = np.linspace(x_min - x_margin, x_max + x_margin, 20)
         y = np.linspace(y_min - y_margin, y_max + y_margin, 20)
         X, Y = np.meshgrid(x, y)
-        Z = plane(normal[0], normal[1], nz, X, Y)
+        Z = (float(gradient[0]) * X + float(gradient[1]) * Y) * self.delay_display_scale
         return X, Y, Z
 
     def refresh(self):
@@ -162,11 +147,16 @@ class Slice3DWindow:
         current_data = self.antenna.data.loc[
             (self.antenna.data["t"] >= slice_range[0]) & (self.antenna.data["t"] <= slice_range[1])
         ].copy(deep=True)
-        flagged_index = self.antenna.delay_adjust_info[self.antenna._flag_col(if_id)] == 1
+        current_data = self.antenna.add_altaz_offsets(current_data)
+        flag_col = self.antenna._flag_col(if_id)
+        flagged_index = self.antenna.delay_adjust_info[flag_col] == 1
+        if flag_col in self.antenna.delay_auto_adjust_info.columns:
+            flagged_index = flagged_index | (self.antenna.delay_auto_adjust_info[flag_col] == 1)
         flagged_data = self.antenna.original_data.loc[flagged_index].copy(deep=True)
         flagged_data = flagged_data.loc[
             (flagged_data["t"] >= slice_range[0]) & (flagged_data["t"] <= slice_range[1])
         ].copy(deep=True)
+        flagged_data = self.antenna.add_altaz_offsets(flagged_data)
 
         self.ax.scatter(0.0, 0.0, 0.0, marker="*", s=90, c="k", label=self.primary.get("NAME", "PRIMARY"))
 
@@ -174,12 +164,12 @@ class Slice3DWindow:
             plot_data = current_data.loc[current_data["calsour"] == item.id].copy(deep=True)
             if not plot_data.empty:
                 plot_data = self.antenna._correct_delay_with_phase(plot_data, if_id)
-                x_vals.extend(plot_data["x"].tolist())
-                y_vals.extend(plot_data["y"].tolist())
+                x_vals.extend(plot_data["delta_el"].tolist())
+                y_vals.extend(plot_data["delta_az"].tolist())
                 plot_data["delay_disp"] = plot_data["total_delay"] * self.delay_display_scale
                 z_vals.extend(plot_data["delay_disp"].tolist())
                 self.ax.scatter(
-                    plot_data["x"], plot_data["y"], plot_data["delay_disp"],
+                    plot_data["delta_el"], plot_data["delta_az"], plot_data["delay_disp"],
                     marker=markers[i % len(markers)], c=[self.antenna.colors[i % len(self.antenna.colors)]],
                     s=34, alpha=1.0, label=item.name,
                 )
@@ -187,23 +177,26 @@ class Slice3DWindow:
             flagged_plot = flagged_data.loc[flagged_data["calsour"] == item.id].copy(deep=True)
             if not flagged_plot.empty:
                 flagged_plot = self.antenna._correct_delay_with_phase(flagged_plot, if_id)
-                x_vals.extend(flagged_plot["x"].tolist())
-                y_vals.extend(flagged_plot["y"].tolist())
+                x_vals.extend(flagged_plot["delta_el"].tolist())
+                y_vals.extend(flagged_plot["delta_az"].tolist())
                 flagged_plot["delay_disp"] = flagged_plot["total_delay"] * self.delay_display_scale
                 z_vals.extend(flagged_plot["delay_disp"].tolist())
                 self.ax.scatter(
-                    flagged_plot["x"], flagged_plot["y"], flagged_plot["delay_disp"],
+                    flagged_plot["delta_el"], flagged_plot["delta_az"], flagged_plot["delay_disp"],
                     marker=markers[i % len(markers)], c=[self.antenna.colors[i % len(self.antenna.colors)]],
                     s=34, alpha=0.3,
                 )
 
-        normal = self._get_center_normal(if_id, slice_range)
+        gradient = self._get_center_gradient(if_id, slice_range)
         target_z = 0.0
-        if normal is not None:
-            scale_ratio = self.antenna.z_scale / self.delay_display_scale if self.delay_display_scale != 0 else 1.0
-            target_z = plane(normal[0], normal[1], normal[2] * scale_ratio, self.target_x, self.target_y)
+        center_t = 0.5 * (slice_range[0] + slice_range[1])
+        target_offset = self.antenna.source_altaz_offsets(self.target, np.array([center_t]))[0]
+        self.target_x = float(target_offset[0])
+        self.target_y = float(target_offset[1])
+        if gradient is not None:
+            target_z = (gradient[0] * self.target_x + gradient[1] * self.target_y) * self.delay_display_scale
         self.ax.scatter(self.target_x, self.target_y, target_z, marker="^", s=70, c=self.target_color, label=self.target["NAME"])
-        X, Y, Z = self._build_plane(normal, np.asarray(x_vals), np.asarray(y_vals))
+        X, Y, Z = self._build_plane(gradient, np.asarray(x_vals), np.asarray(y_vals))
         if X is not None and Y is not None and Z is not None:
             self.ax.plot_surface(X, Y, Z, color="#7A9CC6", alpha=0.25, linewidth=0, antialiased=True)
 
@@ -246,10 +239,10 @@ class Slice3DWindow:
         except Exception:
             pass
 
-        self.ax.set_xlabel("Relative RA (deg)")
-        self.ax.set_ylabel("Relative DEC (deg)")
+        self.ax.set_xlabel("Delta elevation (deg)")
+        self.ax.set_ylabel("Delta azimuth (deg)")
         self.ax.set_zlabel("Delay (ps)")
-        self.ax.set_title(f"3D slice IF{if_id + 1}: {slice_range[0]:.6f} - {slice_range[1]:.6f}")
+        self.ax.set_title(f"AltAz slice IF{if_id + 1}: {slice_range[0]:.6f} - {slice_range[1]:.6f}")
         self.ax.legend(loc="upper left", fontsize=8)
         self.canvas.draw_idle()
 

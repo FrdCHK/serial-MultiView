@@ -7,6 +7,7 @@ import pandas as pd
 from .Calibrator import Calibrator
 from .Antenna import Antenna
 from .Gui import Gui
+from .solver_config import SOLVER_KEYS, apply_solver_defaults
 
 from core.Plugin import Plugin
 from core.Context import Context
@@ -22,7 +23,7 @@ class MVRun(Plugin):
     def get_description(cls) -> str:
         return "Run serial MultiView GUI and save per-antenna adjustments and results. " \
                "Plugins required: MVSnExport, MVPrimaryCalibratorSelect. " \
-               "Parameters optional: max_depth, max_ang_v, min_z, weight, kalman_factor, smo_half_window."
+               "Parameters optional: kalman_factor, unit_weight_variance, rts_smoothing, and viterbi_*."
 
     def run(self, context: Context) -> bool:
         context.logger.info("Start MultiView GUI run")
@@ -36,7 +37,8 @@ class MVRun(Plugin):
         if if_freq is None:
             if_freq = [context.get_context().get("obs_freq", 0.0) for _ in range(int(context.get_context().get("no_if", 1)))]
         base_config["if_freq"] = list(if_freq)
-        for key in ["max_depth", "max_ang_v", "min_z", "weight", "kalman_factor", "smo_half_window"]:
+        apply_solver_defaults(base_config)
+        for key in SOLVER_KEYS:
             if key in self.params:
                 base_config[key] = self.params[key]
 
@@ -80,7 +82,7 @@ class MVRun(Plugin):
             secondary_calibrators = []
             phase_columns = [f"p{if_id}" for if_id in range(no_if)]
             delay_columns = [f"d{if_id}" for if_id in range(no_if)]
-            sn_all = pd.DataFrame(columns=["t", "antenna", "calsour"] + phase_columns + delay_columns)
+            sn_all = pd.DataFrame(columns=["t", "antenna", "calsour", "weight"] + phase_columns + delay_columns)
 
             for _, row in calibrator_table.iterrows():
                 if int(row["ID"]) == int(primary["ID"]):
@@ -93,13 +95,18 @@ class MVRun(Plugin):
                     context.logger.error(f"SN file not found: {sn_path}")
                     return False
                 sn_table = pd.read_csv(sn_path)
+                if "weight" not in sn_table.columns:
+                    sn_table["weight"] = 1.0
                 valid_phase = (sn_table[phase_columns] != 0).all(axis=1)
                 sn_table = sn_table.loc[valid_phase].copy(deep=True)
 
                 calibrator = Calibrator(int(row["ID"]), row["NAME"], row["RA"], row["DEC"], int(row["SN"]), sn_table)
                 calibrator.calc_relative_position(primary_ra, primary_dec)
                 secondary_calibrators.append(calibrator)
-                sn_all = pd.concat([sn_all, sn_table[["t", "antenna", "calsour"] + phase_columns + delay_columns]], ignore_index=True)
+                sn_all = pd.concat(
+                    [sn_all, sn_table[["t", "antenna", "calsour", "weight"] + phase_columns + delay_columns]],
+                    ignore_index=True,
+                )
 
             sn_all["antenna"] = sn_all["antenna"].astype(int)
             sn_all["calsour"] = sn_all["calsour"].astype(int)
@@ -118,10 +125,22 @@ class MVRun(Plugin):
                 if sn_antenna.shape[0] <= 10:
                     antennas_exclude.loc[antennas_exclude.index.size] = [row["ID"], row["NAME"]]
                     continue
-                sn_delay = sn_antenna[["calsour", "x", "y", "t"] + phase_columns + delay_columns].copy(deep=True)
+                sn_delay = sn_antenna[["calsour", "x", "y", "t", "weight"] + phase_columns + delay_columns].copy(deep=True)
                 sn_delay.sort_values(by="t", inplace=True, ascending=True)
                 sn_delay.reset_index(drop=True, inplace=True)
-                antenna = Antenna(int(row["ID"]), row["NAME"], sn_delay, secondary_calibrators, if_freq, no_if)
+                station_xyz = [row.get("X"), row.get("Y"), row.get("Z")]
+                antenna = Antenna(
+                    int(row["ID"]),
+                    row["NAME"],
+                    sn_delay,
+                    secondary_calibrators,
+                    if_freq,
+                    no_if,
+                    station_xyz=station_xyz,
+                    obs_jd0=context.get_context().get("obs_time", {}).get("jd_0"),
+                    primary=primary,
+                    target={"ID": target["ID"], "NAME": target["NAME"], "RA": target["RA"], "DEC": target["DEC"]},
+                )
                 antennas.append(antenna)
 
             target_relative_position = relative_position([primary_ra, primary_dec], [target["RA"], target["DEC"]])

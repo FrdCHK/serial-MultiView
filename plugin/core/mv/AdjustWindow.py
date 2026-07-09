@@ -3,6 +3,7 @@ flag window of GUI
 @Author: Jingdong Zhang
 @DATE  : 2024/8/6
 """
+import ast
 import tkinter as tk
 from tkinter import font
 import matplotlib.pyplot as plt
@@ -57,6 +58,9 @@ class AdjustWindow:
         self.fill = None
         self.y_limits = None
         self.slice_window = None
+        self.fix_initial_window = None
+        self.config.setdefault("viterbi_fix_initial_enabled", False)
+        self.config.setdefault("viterbi_fix_initial_values", {})
 
         self.frames[1].grid_rowconfigure(0, weight=1)
         self.frames[1].grid_columnconfigure(0, weight=18, minsize=300)
@@ -123,6 +127,19 @@ class AdjustWindow:
         )
         original_delay_menu.config(font=self.font)
         original_delay_menu.pack(padx=5, pady=5)
+
+        fix_initial_frame = tk.Frame(left_controls_frame)
+        fix_initial_frame.pack(padx=5, pady=5, fill="x")
+        fix_initial_frame.grid_columnconfigure(0, weight=1)
+        fix_initial_frame.grid_columnconfigure(1, weight=1)
+        self.fix_initial_var = tk.BooleanVar(value=bool(self.config.get("viterbi_fix_initial_enabled", False)))
+        fix_initial_toggle = tk.Checkbutton(fix_initial_frame, text="fix N0", font=self.font,
+                                            variable=self.fix_initial_var, command=self.on_fix_initial_toggle)
+        fix_initial_toggle.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        self.fix_initial_button = tk.Button(fix_initial_frame, height=1, text="set N0",
+                                            font=self.font, command=self.open_fix_initial_window)
+        self.fix_initial_button.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        self.on_fix_initial_toggle()
 
         label_info = tk.Label(right_calibrator_frame, text="secondary\n-- calibrator --\nadjust",
                               font=self.font, anchor="center", justify="center")
@@ -315,7 +332,90 @@ class AdjustWindow:
 
     def on_apply_all(self):
         self.antenna.delay_apply_manual_to_all(self.get_selected_if_id())
-        self.root.rerun()
+        self.delay_plot()
+
+    def on_fix_initial_toggle(self):
+        enabled = bool(self.fix_initial_var.get())
+        self.config["viterbi_fix_initial_enabled"] = enabled
+        self.config.setdefault("viterbi_fix_initial_values", self._fix_initial_values())
+        if hasattr(self, "fix_initial_button"):
+            self.fix_initial_button.config(state=tk.NORMAL if enabled else tk.DISABLED)
+
+    def _fix_initial_values(self):
+        raw_values = self.config.get("viterbi_fix_initial_values", {}) or {}
+        values = {}
+        for item in self.secondary_calibrators:
+            cal_id = int(item.id)
+            values[cal_id] = int(raw_values.get(cal_id, raw_values.get(str(cal_id), 0)))
+        return values
+
+    def _allowed_initial_integers(self):
+        states = self.config.get("viterbi_integer_states", 3)
+        if isinstance(states, str):
+            states = ast.literal_eval(states)
+        if np.isscalar(states):
+            radius = int(states)
+            return set(range(-radius, radius + 1))
+        return {int(item) for item in states}
+
+    def open_fix_initial_window(self):
+        if self.fix_initial_window is not None:
+            try:
+                self.fix_initial_window.lift()
+                self.fix_initial_window.focus_force()
+                return
+            except Exception:
+                self.fix_initial_window = None
+
+        values = self._fix_initial_values()
+        window = tk.Toplevel(self.window)
+        self.fix_initial_window = window
+        window.title("Initial ambiguity")
+        window.geometry("420x420+740+180")
+        window.minsize(width=360, height=260)
+        window.protocol("WM_DELETE_WINDOW", self._close_fix_initial_window)
+        window.grid_columnconfigure(0, weight=1)
+        window.grid_columnconfigure(1, weight=1)
+
+        entries = {}
+        for row, item in enumerate(self.secondary_calibrators):
+            cal_id = int(item.id)
+            label = tk.Label(window, text=f"{item.name} ({cal_id})", font=self.font, anchor="e")
+            label.grid(row=row, column=0, padx=5, pady=5, sticky="ew")
+            entry = tk.Entry(window, font=self.font, width=8)
+            entry.insert(0, str(values.get(cal_id, 0)))
+            entry.grid(row=row, column=1, padx=5, pady=5, sticky="w")
+            entries[cal_id] = entry
+
+        error_label = tk.Label(window, text="", fg="red", font=self.font, anchor="center")
+        error_label.grid(row=len(self.secondary_calibrators), column=0, columnspan=2, padx=5, pady=5, sticky="ew")
+
+        def save_values():
+            try:
+                allowed = self._allowed_initial_integers()
+                parsed = {}
+                for cal_id, entry in entries.items():
+                    value = int(entry.get())
+                    if value not in allowed:
+                        raise ValueError("outside state radius")
+                    parsed[cal_id] = value
+            except (ValueError, SyntaxError):
+                error_label.config(text="invalid integer")
+                return
+            self.config["viterbi_fix_initial_values"] = parsed
+            self.config["viterbi_fix_initial_enabled"] = bool(self.fix_initial_var.get())
+            self._close_fix_initial_window()
+
+        save_button = tk.Button(window, text="save", height=1, width=10, font=self.font, command=save_values)
+        save_button.grid(row=len(self.secondary_calibrators) + 1, column=1, padx=5, pady=5)
+        close_button = tk.Button(window, text="close", height=1, width=10, font=self.font,
+                                 command=self._close_fix_initial_window)
+        close_button.grid(row=len(self.secondary_calibrators) + 1, column=0, padx=5, pady=5)
+
+    def _close_fix_initial_window(self):
+        if self.fix_initial_window is not None:
+            self.fix_initial_window.destroy()
+            self.fix_initial_window = None
 
     def on_ylim_apply(self):
         if self.present_phase_ax is None:
@@ -451,4 +551,6 @@ class AdjustWindow:
     def save(self, adj_dir, mv_dir):
         self.config['reverse'] = self.antenna.reverse
         self.config['t_flag'] = self.antenna.delay_t_flag_info
+        self.config["viterbi_fix_initial_enabled"] = bool(self.fix_initial_var.get())
+        self.config["viterbi_fix_initial_values"] = self._fix_initial_values()
         self.antenna.save_delay(adj_dir, mv_dir)

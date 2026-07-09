@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import yaml
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from util.yaml_util import safe_dump_builtin
+from .solver_config import apply_solver_defaults, solver_kwargs
 
 
 class RootWindow:
@@ -18,6 +19,7 @@ class RootWindow:
         self.target = target
         self.antenna = antenna
         self.config = config
+        apply_solver_defaults(self.config)
 
         base_dir = self.config.get("mv_workspace")
         if not base_dir:
@@ -96,11 +98,11 @@ class RootWindow:
         with open(self.conf_dir, 'w') as f:
             safe_dump_builtin(self.config, f)
         self.present_fig.savefig(
-            os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY-VECTOR.png"),
+            os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY-GRADIENT.png"),
             bbox_inches='tight'
         )
         self.present_fig.savefig(
-            os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY-VECTOR.pdf"),
+            os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY-GRADIENT.pdf"),
             bbox_inches='tight'
         )
         self.adjust_window.delay_plot()
@@ -128,10 +130,7 @@ class RootWindow:
         self.present_fig = fig
 
     def rerun(self, adjust=True):
-        self.antenna.delay_multiview(
-            self.config['max_depth'], self.config['max_ang_v'], self.config['min_z'],
-            self.config['weight'], self.config['kalman_factor'], self.config['smo_half_window']
-        )
+        self.antenna.delay_multiview(**solver_kwargs(self.config))
         self.root_normal_vector_plot()
         if adjust and self.adjust_window is not None:
             self.adjust_window.delay_plot()
@@ -144,6 +143,7 @@ class RootWindow:
             config_load = yaml.safe_load(f) or {}
             for key, value in config_load.items():
                 self.config[key] = value
+            apply_solver_defaults(self.config)
         if os.path.isfile(self.delay_adj_dir):
             delay_adjust_load = pd.read_csv(self.delay_adj_dir)
             manual_df = self.antenna.delay_adjust_info.copy(deep=True)

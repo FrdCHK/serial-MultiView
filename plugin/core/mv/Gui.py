@@ -9,6 +9,7 @@ from .RootWindow import RootWindow
 from .ConfigWindow import ConfigWindow
 from .AdjustWindow import AdjustWindow
 from .Antenna import Antenna
+from .solver_config import apply_solver_defaults, solver_kwargs
 
 
 class Gui:
@@ -17,14 +18,13 @@ class Gui:
         self.primary = primary
         self.antenna = antenna
         self.config = copy.deepcopy(config)
+        apply_solver_defaults(self.config)
         self.default_config = copy.deepcopy(config)
+        apply_solver_defaults(self.default_config)
         self.target_relative_position = target_relative_position
         self.secondary_calibrators = secondary_calibrators
 
-        self.antenna.delay_multiview(
-            self.config['max_depth'], self.config['max_ang_v'], self.config['min_z'],
-            self.config['weight'], self.config['kalman_factor'], self.config['smo_half_window']
-        )
+        self.antenna.delay_multiview(**solver_kwargs(self.config))
 
         self.root_window = RootWindow(self.target, antenna, self.config)
         if mv_flag:
