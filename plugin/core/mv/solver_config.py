@@ -5,7 +5,6 @@ import copy
 
 SOLVER_DEFAULTS = {
     "kalman_factor": 1.0e-14,
-    "unit_weight_variance": 4.0e-22,
     "rts_smoothing": True,
     "viterbi_integer_states": 3,
     "viterbi_max_jump": 1,
@@ -15,6 +14,7 @@ SOLVER_DEFAULTS = {
 }
 
 FIXED_SOLVER_DEFAULTS = {
+    "unit_weight_variance": 4.0e-22,
     "viterbi_robust": True,
     "viterbi_max_outlier_iterations": 2,
     "viterbi_p0_gradient": None,
@@ -29,6 +29,8 @@ SOLVER_KEYS = list(SOLVER_DEFAULTS.keys())
 
 
 def apply_solver_defaults(config):
+    for key in FIXED_SOLVER_DEFAULTS:
+        config.pop(key, None)
     for key, value in SOLVER_DEFAULTS.items():
         config.setdefault(key, copy.deepcopy(value))
     for key, value in ADJUST_DEFAULTS.items():

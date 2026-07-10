@@ -12,7 +12,6 @@ from .solver_config import SOLVER_KEYS, apply_solver_defaults
 
 PARAM_HELP = {
     "kalman_factor": "Continuous process-noise scale for second/degree gradients and their rates.",
-    "unit_weight_variance": "Delay variance in second^2 for SN weight=1. Actual variance is this value divided by SN weight.",
     "rts_smoothing": "Run the backward RTS smoother after the forward Kalman pass.",
     "viterbi_integer_states": "Integer ambiguity search radius n. Default 3 searches [-3, ..., 3].",
     "viterbi_max_jump": "Maximum ambiguity change between adjacent observations of the same calibrator. Default 1.",
@@ -36,8 +35,8 @@ class ConfigWindow:
 
         self.window = tk.Toplevel(root.root)
         self.window.title("CONFIG")
-        self.window.geometry("532x330+67+660")
-        self.window.minsize(width=532, height=330)
+        self.window.geometry("532x320+67+660")
+        self.window.minsize(width=532, height=320)
 
         self.window.grid_columnconfigure(0, weight=1)
         self.window.grid_columnconfigure(1, weight=1)

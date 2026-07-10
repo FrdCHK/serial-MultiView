@@ -28,8 +28,8 @@ class AdjustWindow:
 
         self.window = tk.Toplevel(root.root)
         self.window.title("ADJUST")
-        self.window.geometry("1320x890+600+60")
-        self.window.minsize(width=1320, height=890)
+        self.window.geometry("1320x915+600+60")
+        self.window.minsize(width=1320, height=915)
 
         self.window.grid_columnconfigure(0, weight=1)
         self.window.grid_rowconfigure(0, weight=2)
