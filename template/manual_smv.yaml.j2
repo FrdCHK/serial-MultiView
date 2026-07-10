@@ -29,11 +29,11 @@ plugins:
     params:
       kalman_factor: {{ kalman_factor }}
       rts_smoothing: {{ rts_smoothing }}
-      viterbi_integer_states: {{ viterbi_integer_states }}
-      viterbi_max_jump: {{ viterbi_max_jump }}
-      viterbi_jump_penalty: {{ viterbi_jump_penalty }}
-      viterbi_huber_c: {{ viterbi_huber_c }}
-      viterbi_z_out: {{ viterbi_z_out }}
+      integer_states: {{ integer_states }}
+      max_jump: {{ max_jump }}
+      jump_penalty: {{ jump_penalty }}
+      huber_c: {{ huber_c }}
+      z_out: {{ z_out }}
   - name: MVPostProcess
     params:
       indisk: {{ indisk }}

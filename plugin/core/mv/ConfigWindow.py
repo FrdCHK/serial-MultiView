@@ -13,11 +13,11 @@ from .solver_config import SOLVER_KEYS, apply_solver_defaults
 PARAM_HELP = {
     "kalman_factor": "Continuous process-noise scale for second/degree gradients and their rates.",
     "rts_smoothing": "Run the backward RTS smoother after the forward Kalman pass.",
-    "viterbi_integer_states": "Integer ambiguity search radius n. Default 3 searches [-3, ..., 3].",
-    "viterbi_max_jump": "Maximum ambiguity change between adjacent observations of the same calibrator. Default 1.",
-    "viterbi_jump_penalty": "Cost for an ambiguity jump. Default 25 strongly discourages isolated false slips.",
-    "viterbi_huber_c": "Huber threshold in standardized-residual units. Default 3 is moderately robust.",
-    "viterbi_z_out": "Outlier rejection threshold in standardized-residual units. Default 4 after robust fitting.",
+    "integer_states": "Integer ambiguity search radius n. Default 3 searches [-3, ..., 3].",
+    "max_jump": "Maximum ambiguity change between adjacent observations of the same calibrator. Default 1.",
+    "jump_penalty": "Cost for an ambiguity jump. Default 25 strongly discourages isolated false slips.",
+    "huber_c": "Huber threshold in standardized-residual units. Default 3 is moderately robust.",
+    "z_out": "Outlier rejection threshold in standardized-residual units. Default 4 after robust fitting.",
 }
 
 
@@ -50,7 +50,7 @@ class ConfigWindow:
         self.tip_window = None
 
         for i, text in enumerate(self.labels):
-            label = tk.Label(self.window, text=text+':', width=26, anchor="e", font=self.font,
+            label = tk.Label(self.window, text=text+':', width=18, anchor="e", font=self.font,
                              cursor="question_arrow")
             label.grid(row=i, column=0, padx=5, pady=5)
             label.bind("<Enter>", lambda event, key=text: self._show_tip(key, event))
@@ -135,20 +135,20 @@ class ConfigWindow:
     def _parse_entry(self, label, text):
         if label == "rts_smoothing":
             return self._parse_bool(text)
-        if label == "viterbi_integer_states":
+        if label == "integer_states":
             radius = int(text)
             if radius < 0:
                 raise ValueError("invalid radius")
             return radius
-        if label == "viterbi_max_jump":
+        if label == "max_jump":
             value = int(text)
             if value < 0:
                 raise ValueError("invalid int")
             return value
         value = float(text)
-        if value <= 0.0 and label not in ("viterbi_jump_penalty",):
+        if value <= 0.0 and label not in ("jump_penalty",):
             raise ValueError("invalid positive float")
-        if label == "viterbi_jump_penalty" and value < 0.0:
+        if label == "jump_penalty" and value < 0.0:
             raise ValueError("invalid penalty")
         return value
 
@@ -156,7 +156,7 @@ class ConfigWindow:
     def _entry_text(label, value):
         if value is None:
             return ""
-        if label == "viterbi_integer_states" and not isinstance(value, (str, int, float)):
+        if label == "integer_states" and not isinstance(value, (str, int, float)):
             values = [abs(int(item)) for item in value]
             return str(max(values) if values else 0)
         return str(value)
