@@ -13,6 +13,12 @@ import matplotlib.pyplot as plt
 from typing import List
 
 from .Calibrator import Calibrator
+from .elevation_mapping import (
+    elevation_axis_label,
+    elevation_coordinate_label,
+    gradient_axis_label,
+    normalize_elevation_mapping,
+)
 from .viterbi_kalman_altaz import altaz_offsets, fit_viterbi_kalman_gradient
 # from .rodrigues_rotation import rodrigues_rotation
 
@@ -40,7 +46,8 @@ class Antenna:
 
         ``station_xyz``, ``obs_jd0``, ``primary``, and ``target`` are required
         by the AltAz solver.  They let each scan use the current station-local
-        elevation/azimuth offsets instead of static sky-plane coordinates.
+        mapped elevation/azimuth coordinates instead of static sky-plane
+        coordinates.
 
         :param antenna_id: antenna id
         :param antenna_name: antenna name
@@ -75,6 +82,7 @@ class Antenna:
         self.primary = primary
         self.target = target
         self._source_by_id = {int(cal.id): cal for cal in self.secondary_calibrators}
+        self.elevation_mapping = "linear"
 
         self.reverse = False
 
@@ -191,20 +199,35 @@ class Antenna:
             return float(source["RA"]), float(source["DEC"])
         return float(source.ra), float(source.dec)
 
-    def source_altaz_offsets(self, source, times):
-        """Return ``[delta_el, delta_az]`` relative to the primary calibrator.
+    def source_altaz_offsets(self, source, times, elevation_mapping=None):
+        """Return primary-relative solver coordinates for a source.
 
         The offsets are recomputed for each requested scan time because the
-        station AltAz frame changes as the Earth rotates.
+        station AltAz frame changes as the Earth rotates.  The first coordinate
+        follows the selected elevation mapping, while azimuth remains a wrapped
+        degree difference.
         """
         if self.primary is None or self.station_xyz is None or self.obs_jd0 is None:
             raise ValueError("Primary calibrator, station coordinates, and observation JD are required for AltAz MV.")
+        if elevation_mapping is None:
+            elevation_mapping = self.elevation_mapping
         source_ra, source_dec = self._source_ra_dec(source)
         primary_ra, primary_dec = self._source_ra_dec(self.primary)
-        return altaz_offsets(source_ra, source_dec, primary_ra, primary_dec, times, self.obs_jd0, self.station_xyz)
+        return altaz_offsets(
+            source_ra,
+            source_dec,
+            primary_ra,
+            primary_dec,
+            times,
+            self.obs_jd0,
+            self.station_xyz,
+            elevation_mapping=elevation_mapping,
+        )
 
-    def add_altaz_offsets(self, data_in):
-        """Add per-row AltAz offsets for secondary calibrator observations."""
+    def add_altaz_offsets(self, data_in, elevation_mapping=None):
+        """Add per-row solver coordinates for secondary calibrator observations."""
+        if elevation_mapping is None:
+            elevation_mapping = self.elevation_mapping
         data_out = data_in.copy(deep=True)
         data_out["delta_el"] = np.nan
         data_out["delta_az"] = np.nan
@@ -215,9 +238,13 @@ class Antenna:
             if source is None:
                 continue
             mask = data_out["calsour"].astype(int) == int(calsour)
-            offsets = self.source_altaz_offsets(source, data_out.loc[mask, "t"].to_numpy())
+            offsets = self.source_altaz_offsets(source, data_out.loc[mask, "t"].to_numpy(), elevation_mapping)
             data_out.loc[mask, ["delta_el", "delta_az"]] = offsets
         return data_out
+
+    def elevation_axis_label(self):
+        """Return the first-coordinate label for plots."""
+        return elevation_axis_label(self.elevation_mapping)
 
     def delay_multiview(
         self,
@@ -233,6 +260,7 @@ class Antenna:
         viterbi_max_outlier_iterations=2,
         viterbi_fix_initial_integer=0,
         viterbi_p0_gradient=None,
+        elevation_mapping="linear",
         progress_callback=None,
     ):
         """
@@ -240,8 +268,8 @@ class Antenna:
 
         The primary calibrator is the zero point.  For each secondary-calibrator
         row and IF, this method builds a total-delay observable in seconds,
-        computes current AltAz offsets in degrees, and calls the Viterbi-Kalman
-        solver for the state
+        computes current primary-relative mapped-elevation/AltAz coordinates,
+        and calls the Viterbi-Kalman solver for the state
 
             [grad_el, grad_az, rate_grad_el, rate_grad_az].
 
@@ -298,6 +326,7 @@ class Antenna:
         viterbi_max_outlier_iterations = int(viterbi_max_outlier_iterations)
         viterbi_fix_initial_integer = self._parse_initial_integer(viterbi_fix_initial_integer)
         viterbi_p0_gradient = self._parse_optional(viterbi_p0_gradient, float)
+        self.elevation_mapping = normalize_elevation_mapping(elevation_mapping)
 
         delay_results = {}
         delay_t_by_if = {}
@@ -317,7 +346,7 @@ class Antenna:
             # solver receives a phase-consistent total delay in seconds.
             data_corrected = self._correct_delay_with_phase(self.data.copy(deep=True), if_id)
             data_view = data_corrected[["calsour", "t", "total_delay", "weight", "_orig_index"]].copy(deep=True)
-            data_view = self.add_altaz_offsets(data_view)
+            data_view = self.add_altaz_offsets(data_view, self.elevation_mapping)
             finite = (
                 np.isfinite(data_view["total_delay"].to_numpy(dtype=float))
                 & np.isfinite(data_view["weight"].to_numpy(dtype=float))
@@ -618,7 +647,7 @@ class Antenna:
         self.data.reset_index(drop=True, inplace=True)
 
     def plot_delay_normal_vector(self, if_id=None):
-        """Plot the fitted AltAz delay gradients for the root GUI window.
+        """Plot the fitted mapped-elevation/AltAz delay gradients.
 
         The historical method name is retained because several GUI classes call
         it, but the plotted quantity is no longer a 3D normal vector.
@@ -631,16 +660,16 @@ class Antenna:
         if mv_t is None or len(mv_t) == 0:
             return plt.figure(figsize=(8, 4))
         fig, ax = plt.subplots(1, 1, figsize=(5.0, 3.6))
-        fig.subplots_adjust(left=0.18, right=0.96, top=0.88, bottom=0.20)
+        fig.subplots_adjust(left=0.24, right=0.96, top=0.88, bottom=0.20)
         mv = self.delay_mv_result[if_id]
         n_plot = min(len(mv_t), len(mv))
         mv_t = np.asarray(mv_t, dtype=float)[:n_plot]
         mv = mv[:n_plot]
-        grad_labels = ["elevation", "azimuth"]
+        grad_labels = [elevation_coordinate_label(self.elevation_mapping), "azimuth"]
         for i in range(min(2, mv.shape[1])):
             ax.plot(mv_t, mv[:, i] * 1e12, ls=['-', '--'][i], label=grad_labels[i])
         ax.set_xlabel("time (day)")
-        ax.set_ylabel("delay gradient (ps/deg)")
+        ax.set_ylabel(gradient_axis_label(self.elevation_mapping))
         ax.legend()
         ax.set_title(f"AltAz Delay Gradients (IF{if_id + 1})")
         return fig
@@ -659,7 +688,7 @@ class Antenna:
                 continue
             times = np.asarray(times_raw, dtype=float)
             n_target = min(len(times), len(mv_res))
-            target_offsets = self.source_altaz_offsets(self.target, times[:n_target])
+            target_offsets = self.source_altaz_offsets(self.target, times[:n_target], self.elevation_mapping)
             refreshed[if_id] = np.sum(mv_res[:n_target, :2] * target_offsets, axis=1)
         self.delay_target_if = refreshed
         valid_items = [(if_id, arr) for if_id, arr in self.delay_target_if.items() if arr.size > 0]

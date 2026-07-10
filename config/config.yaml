@@ -10,6 +10,7 @@ ref_ant: two-charactor antenna code, e.g, PT
 predef_source_list: your pre-defined source list. context file of previous sessions can be used
 kalman_factor: 1.0e-14
 rts_smoothing: True
+elevation_mapping: linear
 integer_states: 3
 max_jump: 1
 jump_penalty: 25.0

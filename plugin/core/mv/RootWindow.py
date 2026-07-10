@@ -128,7 +128,8 @@ class RootWindow:
         """Refresh the root-window gradient plot.
 
         The method name is kept for compatibility with older GUI code; the plot
-        now shows AltAz delay gradients, not normal-vector components.
+        now shows mapped-elevation/AltAz delay gradients, not normal-vector
+        components.
         """
         if not isinstance(self.antenna.delay_mv_result, dict) or not self.antenna.delay_mv_result:
             return

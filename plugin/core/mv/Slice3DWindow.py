@@ -13,10 +13,11 @@ from .Antenna import Antenna
 class Slice3DWindow:
     """3D inspection view for one time slice of the AltAz delay plane.
 
-    The displayed plane is ``delay = grad_el * delta_el + grad_az * delta_az``
-    through the primary calibrator at ``(0, 0, 0)``.  It is a visualization of
-    the solved gradient nearest the selected slice center, not an additional
-    fit performed inside this window.
+    The displayed plane is ``delay = grad_el * x_el + grad_az * delta_az``
+    through the primary calibrator at ``(0, 0, 0)``.  ``x_el`` is either linear
+    elevation difference or raw cosecant-elevation difference, matching the
+    current solver config.  This is a visualization of the solved gradient
+    nearest the selected slice center, not an additional fit.
     """
 
     def __init__(self, parent, antenna: Antenna, target, primary, secondary_calibrators, get_selected_if_id, on_close=None):
@@ -211,28 +212,28 @@ class Slice3DWindow:
         if X is not None and Y is not None and Z is not None:
             self.ax.plot_surface(X, Y, Z, color="#7A9CC6", alpha=0.25, linewidth=0, antialiased=True)
 
-        if z_vals:
-            z_min = min(z_vals)
-            z_max = max(z_vals)
-            if target_z < z_max:
-                self.ax.plot(
-                    [self.target_x, self.target_x],
-                    [self.target_y, self.target_y],
-                    [target_z, z_max],
-                    color=self.target_color,
-                    linewidth=1.0,
-                    alpha=0.9,
-                )
-            if target_z > z_min:
-                self.ax.plot(
-                    [self.target_x, self.target_x],
-                    [self.target_y, self.target_y],
-                    [z_min, target_z],
-                    color=self.target_color,
-                    linewidth=1.0,
-                    alpha=0.9,
-                    linestyle=":",
-                )
+        # if z_vals:
+        #     z_min = min(z_vals)
+        #     z_max = max(z_vals)
+        #     if target_z < z_max:
+        #         self.ax.plot(
+        #             [self.target_x, self.target_x],
+        #             [self.target_y, self.target_y],
+        #             [target_z, z_max],
+        #             color=self.target_color,
+        #             linewidth=1.0,
+        #             alpha=0.9,
+        #         )
+        #     if target_z > z_min:
+        #         self.ax.plot(
+        #             [self.target_x, self.target_x],
+        #             [self.target_y, self.target_y],
+        #             [z_min, target_z],
+        #             color=self.target_color,
+        #             linewidth=1.0,
+        #             alpha=0.9,
+        #             linestyle=":",
+        #         )
 
         x_pad = max(0.05, 0.15 * max(np.ptp(x_vals), 1e-6))
         y_pad = max(0.05, 0.15 * max(np.ptp(y_vals), 1e-6))
@@ -242,15 +243,21 @@ class Slice3DWindow:
         self.ax.set_zlim(min(z_vals) - z_pad, max(z_vals) + z_pad)
 
         try:
+            x_span = np.ptp(x_vals) + 1e-6
+            y_span = np.ptp(y_vals) + 1e-6
+            z_span = np.ptp(z_vals) + 1e-6
+            xy_span = max(x_span, y_span)
+            # Keep X and Y visually equal even when their units differ, such as
+            # raw cosecant elevation versus azimuth degrees.
             self.ax.set_box_aspect((
-                np.ptp(x_vals) + 1e-6,
-                np.ptp(y_vals) + 1e-6,
-                (np.ptp(z_vals) + 1e-6) * self.box_aspect_scale,
+                1.0,
+                1.0,
+                z_span / xy_span * self.box_aspect_scale,
             ))
         except Exception:
             pass
 
-        self.ax.set_xlabel("Delta elevation (deg)")
+        self.ax.set_xlabel(self.antenna.elevation_axis_label())
         self.ax.set_ylabel("Delta azimuth (deg)")
         self.ax.set_zlabel("Delay (ps)")
         self.ax.set_title(f"AltAz slice IF{if_id + 1}: {slice_range[0]:.6f} - {slice_range[1]:.6f}")

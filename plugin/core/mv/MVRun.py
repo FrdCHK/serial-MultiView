@@ -23,8 +23,8 @@ class MVRun(Plugin):
     def get_description(cls) -> str:
         return "Run serial MultiView GUI and save per-antenna adjustments and results. " \
                "Plugins required: MVSnExport, MVPrimaryCalibratorSelect. " \
-               "Parameters optional: kalman_factor, rts_smoothing, integer_states, " \
-               "max_jump, jump_penalty, huber_c, and z_out."
+               "Parameters optional: kalman_factor, rts_smoothing, elevation_mapping, " \
+               "integer_states, max_jump, jump_penalty, huber_c, and z_out."
 
     def run(self, context: Context) -> bool:
         context.logger.info("Start MultiView GUI run")
@@ -42,6 +42,7 @@ class MVRun(Plugin):
         for key in SOLVER_KEYS:
             if key in self.params:
                 base_config[key] = self.params[key]
+        apply_solver_defaults(base_config)
 
         workspace_dir = base_config.get("workspace", ".")
         no_if = int(context.get_context().get("no_if", 1))

@@ -11,10 +11,13 @@ low-level controls stay fixed here instead of appearing in the config window.
 
 import copy
 
+from .elevation_mapping import normalize_elevation_mapping
+
 
 SOLVER_DEFAULTS = {
     "kalman_factor": 1.0e-14,
     "rts_smoothing": True,
+    "elevation_mapping": "linear",
     "integer_states": 3,
     "max_jump": 1,
     "jump_penalty": 25.0,
@@ -71,6 +74,7 @@ def apply_solver_defaults(config):
             config.setdefault(new_key, config.pop(legacy_key))
     for key, value in SOLVER_DEFAULTS.items():
         config.setdefault(key, copy.deepcopy(value))
+    config["elevation_mapping"] = normalize_elevation_mapping(config.get("elevation_mapping"))
     for key, value in ADJUST_DEFAULTS.items():
         config.setdefault(key, copy.deepcopy(value))
     return config

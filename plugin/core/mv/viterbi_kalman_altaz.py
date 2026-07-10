@@ -5,14 +5,16 @@ primary calibrator is the zero point, so the fitted atmospheric delay plane has
 no intercept.  For a secondary calibrator observation at time ``t_i``:
 
     y_i + n_i * ambiguity_spacing = H_i x_i + e_i
-    H_i = [delta_el_i, delta_az_i, 0, 0]
+    H_i = [x_el_i, delta_az_i, 0, 0]
     x_i = [g_el, g_az, dg_el_dt, dg_az_dt]
 
-``delta_el`` and ``delta_az`` are in degrees relative to the primary
-calibrator at the same station and scan time.  ``y_i`` is the total delay in
-seconds.  The rate components are temporal derivatives of the two delay
-gradients; they are inferred from the delay time series by the state dynamics,
-not read from the exported SN rate columns.
+``x_el`` is the selected primary-relative elevation coordinate: ordinary degree
+difference for ``linear`` mapping, or raw ``csc(el_source) - csc(el_primary)``
+for ``cosecant`` mapping.  ``delta_az`` is always in degrees relative to the
+primary calibrator at the same station and scan time.  ``y_i`` is the total
+delay in seconds.  The rate components are temporal derivatives of the two
+delay gradients; they are inferred from the delay time series by the state
+dynamics, not read from the exported SN rate columns.
 
 The discrete ambiguity integer ``n_i`` is persistent per secondary calibrator.
 Viterbi dynamic programming chooses the lowest-cost integer path while each
@@ -31,6 +33,8 @@ from astropy import units as u
 from astropy.coordinates import AltAz, Angle, EarthLocation, SkyCoord
 from astropy.time import Time
 from astropy.utils import iers
+
+from .elevation_mapping import mapped_elevation_offset
 
 
 iers.conf.auto_download = False
@@ -136,7 +140,7 @@ def _validate_inputs(
 
 
 def _design_row(delta_el: float, delta_az: float) -> np.ndarray:
-    """Observation row for an intercept-free AltAz delay plane."""
+    """Observation row for an intercept-free mapped-elevation/AltAz plane."""
     return np.array([float(delta_el), float(delta_az), 0.0, 0.0], dtype=float)
 
 
@@ -593,13 +597,17 @@ def altaz_offsets(
     times_day: Iterable[float],
     obs_jd0: float,
     station_xyz: Iterable[float],
+    elevation_mapping: str = "linear",
 ) -> np.ndarray:
     """Compute source-primary AltAz offsets for each scan time.
 
     ``station_xyz`` is geocentric ITRF-like X/Y/Z in meters.  ``times_day`` is
     the AIPS/SN relative time in days and ``obs_jd0`` is the observation JD
-    origin.  The azimuth difference is wrapped to ``[-180, 180)`` degrees so a
-    source pair crossing north does not create a spurious large separation.
+    origin.  The first coordinate is either ordinary elevation difference in
+    degrees or raw cosecant-elevation mapping difference, depending on
+    ``elevation_mapping``.  The azimuth difference is wrapped to
+    ``[-180, 180)`` degrees so a source pair crossing north does not create a
+    spurious large separation.
     """
     times_arr = _as_float_array("times_day", times_day)
     xyz = np.asarray(station_xyz, dtype=float)
@@ -610,6 +618,10 @@ def altaz_offsets(
     frame = AltAz(obstime=obstime, location=location)
     source = SkyCoord(float(source_ra), float(source_dec), unit=u.deg, frame="icrs").transform_to(frame)
     primary = SkyCoord(float(primary_ra), float(primary_dec), unit=u.deg, frame="icrs").transform_to(frame)
-    delta_el = (source.alt - primary.alt).to_value(u.deg)
+    delta_el = mapped_elevation_offset(
+        source.alt.to_value(u.deg),
+        primary.alt.to_value(u.deg),
+        elevation_mapping,
+    )
     delta_az = Angle(source.az - primary.az).wrap_at(180 * u.deg).to_value(u.deg)
     return np.column_stack([delta_el, delta_az])

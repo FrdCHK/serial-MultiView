@@ -2,7 +2,8 @@
 
 This document describes the current serial MultiView delay implementation in
 `plugin/core/mv`.  It replaces the older recursive normal-vector solver with a
-per-IF Viterbi-Kalman solver in station-local AltAz coordinates.
+per-IF Viterbi-Kalman solver in station-local mapped-elevation/AltAz
+coordinates.
 
 ## Scope
 
@@ -30,17 +31,25 @@ Time(obs_jd0 + t, format="jd", scale="utc")
 AltAz(obstime=..., location=...)
 ```
 
-The solver coordinates are:
+The solver coordinates are primary-relative.  The azimuth coordinate is always:
 
 ```text
-delta_el = secondary_alt - primary_alt
 delta_az = wrap_at_180(secondary_az - primary_az)
 ```
 
-Both are in degrees.  The same conversion is used for the target when the final
-target correction is evaluated.  Because AltAz coordinates change with Earth
-rotation, offsets are recomputed for each scan time, not cached as one static
-sky-plane separation.
+The elevation coordinate is selected by `elevation_mapping`:
+
+```text
+linear:   x_el = secondary_alt - primary_alt
+cosecant: x_el = 1/sin(secondary_alt) - 1/sin(primary_alt)
+```
+
+For `linear`, `x_el` and `delta_az` are both in degrees.  For `cosecant`,
+`x_el` is a raw dimensionless slant-mapping difference while `delta_az` remains
+in degrees.  Any invalid mapping name read from config is treated as `linear`.
+The same mapping is used for the target when the final target correction is
+evaluated.  Because AltAz coordinates change with Earth rotation, offsets are
+recomputed for each scan time, not cached as one static sky-plane separation.
 
 ## Delay Observable
 
@@ -74,16 +83,17 @@ intercept or center-delay state.  The continuous state is:
 x_i = [g_el_i, g_az_i, dg_el_dt_i, dg_az_dt_i]^T
 ```
 
-where `g_el` and `g_az` have units of seconds per degree.  The two rate terms
-are temporal derivatives of those gradients, in seconds per degree per day.
-They are estimated from the delay time series by the Kalman dynamics.  The SN
-rate columns are not used as solver input.
+For `linear`, `g_el` and `g_az` have units of seconds per degree.  For
+`cosecant`, `g_el` has units of seconds per cosecant-unit while `g_az` remains
+seconds per degree.  The two rate terms are temporal derivatives of those
+gradients per day.  They are estimated from the delay time series by the Kalman
+dynamics.  The SN rate columns are not used as solver input.
 
 For a secondary calibrator observation:
 
 ```text
 y_i + n_i * ambiguity_spacing = H_i x_i + e_i
-H_i = [delta_el_i, delta_az_i, 0, 0]
+H_i = [x_el_i, delta_az_i, 0, 0]
 e_i ~ N(0, R_i)
 ```
 
@@ -176,6 +186,8 @@ window:
 - `kalman_factor`: process-noise scale `q` for gradient/rate evolution.
 - `rts_smoothing`: enable the RTS backward smoother after the forward Kalman
   pass.
+- `elevation_mapping`: `linear` or `cosecant`; invalid strings fall back to
+  `linear`.
 - `integer_states`: integer search radius `n`, expanded to `[-n, ..., n]`.
 - `max_jump`: maximum ambiguity-integer change allowed for one calibrator step.
 - `jump_penalty`: fixed Viterbi cost added when an ambiguity integer changes.
@@ -195,6 +207,8 @@ Older saved configs containing `viterbi_*` keys are migrated when loaded.
 
 - `plugin/core/mv/viterbi_kalman_altaz.py`: numerical solver and AltAz offset
   helper.
+- `plugin/core/mv/elevation_mapping.py`: elevation mapping choices,
+  normalization, coordinate transform, and plot labels.
 - `plugin/core/mv/solver_config.py`: public defaults, legacy key migration, and
   GUI-to-solver keyword translation.
 - `plugin/core/mv/Antenna.py`: per-IF data preparation, phase-consistent delay
@@ -232,7 +246,7 @@ For each target and antenna, the GUI saves:
 - manual delay adjustments: `*-DELAY-ADJ.csv`
 - per-antenna config: `*-CONF.yaml`
 - averaged target delay correction: `*-DELAY.csv` with `t, mbdelay`
-- diagnostic plots for the delay data and AltAz delay gradients
+- diagnostic plots for the delay data and mapped-elevation/AltAz delay gradients
 
 Automatic Viterbi wraps and outlier flags are not persisted as manual edits;
 they are recomputed on rerun from the saved parameters and manual edits.

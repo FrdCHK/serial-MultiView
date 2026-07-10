@@ -7,12 +7,14 @@ import copy
 import tkinter as tk
 from tkinter import font
 
+from .elevation_mapping import ELEVATION_MAPPING_CHOICES, normalize_elevation_mapping
 from .solver_config import SOLVER_KEYS, apply_solver_defaults
 
 
 PARAM_HELP = {
-    "kalman_factor": "Continuous process-noise scale for second/degree gradients and their rates.",
+    "kalman_factor": "Continuous process-noise scale for delay gradients and their rates.",
     "rts_smoothing": "Run the backward RTS smoother after the forward Kalman pass.",
+    "elevation_mapping": "Elevation coordinate: linear uses delta elevation; cosecant uses csc(el)-csc(primary).",
     "integer_states": "Integer ambiguity search radius n. Default 3 searches [-3, ..., 3].",
     "max_jump": "Maximum ambiguity change between adjacent observations of the same calibrator. Default 1.",
     "jump_penalty": "Cost for an ambiguity jump. Default 25 strongly discourages isolated false slips.",
@@ -42,8 +44,8 @@ class ConfigWindow:
 
         self.window = tk.Toplevel(root.root)
         self.window.title("CONFIG")
-        self.window.geometry("532x320+67+660")
-        self.window.minsize(width=532, height=320)
+        self.window.geometry("532x360+67+660")
+        self.window.minsize(width=532, height=360)
 
         self.window.grid_columnconfigure(0, weight=1)
         self.window.grid_columnconfigure(1, weight=1)
@@ -69,6 +71,13 @@ class ConfigWindow:
                 checkbox.grid(row=i, column=1, padx=5, pady=5, sticky="w")
                 checkbox.bind("<Enter>", lambda event, key=text: self._show_tip(key, event))
                 checkbox.bind("<Leave>", self._hide_tip)
+            elif text == "elevation_mapping":
+                entry = tk.StringVar(value=normalize_elevation_mapping(self.config[self.labels[i]]))
+                option = tk.OptionMenu(self.window, entry, *ELEVATION_MAPPING_CHOICES)
+                option.config(font=self.font)
+                option.grid(row=i, column=1, padx=5, pady=5, sticky="w")
+                option.bind("<Enter>", lambda event, key=text: self._show_tip(key, event))
+                option.bind("<Leave>", self._hide_tip)
             else:
                 entry = tk.Entry(self.window, font=self.font)
                 entry.insert(0, self._entry_text(text, self.config[self.labels[i]]))
@@ -106,6 +115,8 @@ class ConfigWindow:
             try:
                 if label == "rts_smoothing":
                     entry = bool(item.get())
+                elif label == "elevation_mapping":
+                    entry = normalize_elevation_mapping(item.get())
                 else:
                     entry = self._parse_entry(label, item.get())
                 out_entries.append(entry)
@@ -144,6 +155,8 @@ class ConfigWindow:
         """Parse one text entry using the constraints of that parameter."""
         if label == "rts_smoothing":
             return self._parse_bool(text)
+        if label == "elevation_mapping":
+            return normalize_elevation_mapping(text)
         if label == "integer_states":
             radius = int(text)
             if radius < 0:
@@ -165,6 +178,8 @@ class ConfigWindow:
     def _entry_text(label, value):
         if value is None:
             return ""
+        if label == "elevation_mapping":
+            return normalize_elevation_mapping(value)
         if label == "integer_states" and not isinstance(value, (str, int, float)):
             values = [abs(int(item)) for item in value]
             return str(max(values) if values else 0)
@@ -176,6 +191,9 @@ class ConfigWindow:
             self.config[self.labels[i]] = copy.deepcopy(self.config_bk[self.labels[i]])
             if text == "rts_smoothing":
                 self.entries[i].set(bool(self.config[self.labels[i]]))
+            elif text == "elevation_mapping":
+                self.config[self.labels[i]] = normalize_elevation_mapping(self.config[self.labels[i]])
+                self.entries[i].set(self.config[self.labels[i]])
             else:
                 self.entries[i].delete(0, tk.END)
                 self.entries[i].insert(0, self._entry_text(text, self.config[self.labels[i]]))
