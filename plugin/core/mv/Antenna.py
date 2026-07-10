@@ -563,8 +563,8 @@ class Antenna:
         mv_t = self.delay_mv_t_by_if.get(if_id, self.delay_mv_t)
         if mv_t is None or len(mv_t) == 0:
             return plt.figure(figsize=(8, 4))
-        fig, ax = plt.subplots(1, 1, figsize=(8, 4))
-        fig.subplots_adjust(left=0.07, right=0.98, top=0.98, bottom=0.1)
+        fig, ax = plt.subplots(1, 1, figsize=(5.0, 3.6))
+        fig.subplots_adjust(left=0.18, right=0.96, top=0.88, bottom=0.20)
         mv = self.delay_mv_result[if_id]
         n_plot = min(len(mv_t), len(mv))
         mv_t = np.asarray(mv_t, dtype=float)[:n_plot]
