@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import yaml
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from util.yaml_util import safe_dump_builtin
+from .ProgressWindow import ProgressWindow
 from .solver_config import apply_solver_defaults, solver_kwargs
 
 
@@ -129,8 +130,16 @@ class RootWindow:
         canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
         self.present_fig = fig
 
-    def rerun(self, adjust=True):
-        self.antenna.delay_multiview(**solver_kwargs(self.config))
+    def rerun(self, adjust=True, show_progress=True):
+        kwargs = solver_kwargs(self.config)
+        progress_window = ProgressWindow(self.root, "MultiView calculation") if show_progress else None
+        if progress_window is not None:
+            kwargs["progress_callback"] = progress_window.update
+        try:
+            self.antenna.delay_multiview(**kwargs)
+        finally:
+            if progress_window is not None:
+                progress_window.close()
         self.root_normal_vector_plot()
         if adjust and self.adjust_window is not None:
             self.adjust_window.delay_plot()

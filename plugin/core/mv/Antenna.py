@@ -218,11 +218,17 @@ class Antenna:
         viterbi_max_outlier_iterations=2,
         viterbi_fix_initial_integer=0,
         viterbi_p0_gradient=None,
+        progress_callback=None,
     ):
         """
         Solve total delay per IF independently, then average the solved target delay.
         """
+        def report(message, current=None, total=None):
+            if progress_callback is not None:
+                progress_callback(message, current, total)
+
         if self.original_data.empty:
+            report("No delay data available", 1, 1)
             self.delay_mv_result = {}
             self.delay_mv_t = np.array([])
             self.delay_mv_t_by_if = {}
@@ -230,9 +236,14 @@ class Antenna:
             self.delay_average = np.array([])
             self.delay_average_t = np.array([])
             return
+        n_if = len(self.delay_if_ids)
+        progress_total = max(1, n_if * 3 + 2)
+        progress_current = 0
+        report("Preparing delay data", progress_current, progress_total)
         self.delay_auto_reset()
         self.update_delay_data()
         if self.data.empty or not self.delay_if_ids:
+            report("No unflagged delay data available", progress_total, progress_total)
             self.delay_mv_result = {}
             self.delay_mv_t = np.array([])
             self.delay_mv_t_by_if = {}
@@ -259,11 +270,14 @@ class Antenna:
         delay_results = {}
         delay_t_by_if = {}
         fit_info = {}
-        for if_id in self.delay_if_ids:
+        for if_num, if_id in enumerate(self.delay_if_ids, start=1):
+            report(f"IF {if_num}/{n_if}: preparing observations", progress_current, progress_total)
             self.update_delay_data(if_id)
             if self.data.empty:
                 delay_results[if_id] = np.empty((0, 4))
                 delay_t_by_if[if_id] = np.array([])
+                progress_current += 3
+                report(f"IF {if_num}/{n_if}: skipped", progress_current, progress_total)
                 continue
             if "weight" not in self.data.columns:
                 self.data["weight"] = 1.0
@@ -282,7 +296,11 @@ class Antenna:
             if data_view.empty:
                 delay_results[if_id] = np.empty((0, 4))
                 delay_t_by_if[if_id] = np.array([])
+                progress_current += 3
+                report(f"IF {if_num}/{n_if}: skipped", progress_current, progress_total)
                 continue
+            progress_current += 1
+            report(f"IF {if_num}/{n_if}: fitting Viterbi-Kalman", progress_current, progress_total)
 
             data_solve = data_view.iloc[::-1].copy(deep=True) if self.reverse else data_view
             ambiguity_spacing = 1.0 / (self.if_freq.get(if_id, 1.0) * 1e9)
@@ -307,6 +325,8 @@ class Antenna:
                 p0_gradient=viterbi_p0_gradient,
                 rts_smoothing=rts_smoothing,
             )
+            progress_current += 1
+            report(f"IF {if_num}/{n_if}: storing result", progress_current, progress_total)
             if self.reverse:
                 mv_res = fit.state[::-1]
                 mv_t = data_solve["t"].to_numpy(dtype=float)[::-1]
@@ -331,7 +351,10 @@ class Antenna:
             outlier_orig_index = orig_index[np.asarray(outlier_mask, dtype=bool)]
             if outlier_orig_index.size > 0:
                 self.delay_auto_adjust_info.loc[outlier_orig_index, self._flag_col(if_id)] = 1
+            progress_current += 1
+            report(f"IF {if_num}/{n_if}: done", progress_current, progress_total)
 
+        report("Computing target correction", progress_total - 1, progress_total)
         self.delay_mv_result = delay_results
         self.delay_mv_t_by_if = delay_t_by_if
         self.delay_fit_info = fit_info
@@ -339,6 +362,7 @@ class Antenna:
         self.delay_mv_t = delay_t_by_if[first_if] if first_if is not None else np.array([])
         self.delay_target_if = {}
         self._refresh_delay_target_series()
+        report("Calculation complete", progress_total, progress_total)
 
     def delay_flag(self, timerange, calibrators, mode='flag'):
         return self.delay_flag_if(timerange, calibrators, 0, mode)
