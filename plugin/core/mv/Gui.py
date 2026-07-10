@@ -13,6 +13,8 @@ from .solver_config import apply_solver_defaults
 
 
 class Gui:
+    """Compose the root, config, and adjust windows for one MV solve."""
+
     def __init__(self, target, primary, antenna: Antenna, config, target_relative_position, secondary_calibrators, mv_flag=False):
         self.target = target
         self.primary = primary
@@ -25,6 +27,8 @@ class Gui:
         self.secondary_calibrators = secondary_calibrators
 
         self.root_window = RootWindow(self.target, antenna, self.config)
+        # The initial solve is launched through RootWindow so first run and
+        # manual rerun share the same progress popup and config translation.
         if mv_flag:
             self.root_window.load()
             self.config_window = ConfigWindow(self.root_window, antenna, self.config, self.default_config)

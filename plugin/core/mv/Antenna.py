@@ -32,7 +32,16 @@ class Antenna:
         target=None,
     ):
         """
-        antenna class for MultiView
+        Antenna-local state for the MultiView GUI and delay solver.
+
+        ``data`` is the per-antenna SN export for secondary calibrators.  Delay
+        columns are named ``d{if_id}``, phase columns ``p{if_id}``, and
+        ``weight`` is the SN weight used to form observation variances.
+
+        ``station_xyz``, ``obs_jd0``, ``primary``, and ``target`` are required
+        by the AltAz solver.  They let each scan use the current station-local
+        elevation/azimuth offsets instead of static sky-plane coordinates.
+
         :param antenna_id: antenna id
         :param antenna_name: antenna name
         :param data: input time series
@@ -183,6 +192,11 @@ class Antenna:
         return float(source.ra), float(source.dec)
 
     def source_altaz_offsets(self, source, times):
+        """Return ``[delta_el, delta_az]`` relative to the primary calibrator.
+
+        The offsets are recomputed for each requested scan time because the
+        station AltAz frame changes as the Earth rotates.
+        """
         if self.primary is None or self.station_xyz is None or self.obs_jd0 is None:
             raise ValueError("Primary calibrator, station coordinates, and observation JD are required for AltAz MV.")
         source_ra, source_dec = self._source_ra_dec(source)
@@ -190,6 +204,7 @@ class Antenna:
         return altaz_offsets(source_ra, source_dec, primary_ra, primary_dec, times, self.obs_jd0, self.station_xyz)
 
     def add_altaz_offsets(self, data_in):
+        """Add per-row AltAz offsets for secondary calibrator observations."""
         data_out = data_in.copy(deep=True)
         data_out["delta_el"] = np.nan
         data_out["delta_az"] = np.nan
@@ -221,7 +236,24 @@ class Antenna:
         progress_callback=None,
     ):
         """
-        Solve total delay per IF independently, then average the solved target delay.
+        Solve delay MultiView gradients independently for each IF.
+
+        The primary calibrator is the zero point.  For each secondary-calibrator
+        row and IF, this method builds a total-delay observable in seconds,
+        computes current AltAz offsets in degrees, and calls the Viterbi-Kalman
+        solver for the state
+
+            [grad_el, grad_az, rate_grad_el, rate_grad_az].
+
+        ``unit_weight_variance / weight`` is used as the scalar observation
+        variance.  ``unit_weight_variance`` is kept fixed by ``solver_config``
+        because only relative weights matter for the current exported MV delay.
+        The ambiguity spacing is one IF phase wrap, ``1 / if_freq_hz``.
+
+        The returned gradients are evaluated at the target AltAz offset for the
+        same times, then the IF-specific target delays are interpolated to the
+        first valid IF and averaged.  Output compatibility is preserved by
+        saving only ``t`` and averaged ``mbdelay`` downstream.
         """
         def report(message, current=None, total=None):
             if progress_callback is not None:
@@ -281,6 +313,8 @@ class Antenna:
                 continue
             if "weight" not in self.data.columns:
                 self.data["weight"] = 1.0
+            # Fold the exported phase back into the delay observable so the
+            # solver receives a phase-consistent total delay in seconds.
             data_corrected = self._correct_delay_with_phase(self.data.copy(deep=True), if_id)
             data_view = data_corrected[["calsour", "t", "total_delay", "weight", "_orig_index"]].copy(deep=True)
             data_view = self.add_altaz_offsets(data_view)
@@ -347,9 +381,13 @@ class Antenna:
                 "outlier_mask": outlier_mask,
                 "standardized_residual": fit.standardized_residual[::-1] if self.reverse else fit.standardized_residual,
             }
+            # Store the Viterbi ambiguity path as automatic wrap adjustments so
+            # plots and later manual edits use the same corrected data model.
             self.delay_auto_adjust_info.loc[orig_index, self._wrap_col(if_id)] = integer_path.astype(int)
             outlier_orig_index = orig_index[np.asarray(outlier_mask, dtype=bool)]
             if outlier_orig_index.size > 0:
+                # Outliers identified during the solver refit are treated like
+                # automatic flags for this IF.  Manual flags remain separate.
                 self.delay_auto_adjust_info.loc[outlier_orig_index, self._flag_col(if_id)] = 1
             progress_current += 1
             report(f"IF {if_num}/{n_if}: done", progress_current, progress_total)
@@ -580,6 +618,11 @@ class Antenna:
         self.data.reset_index(drop=True, inplace=True)
 
     def plot_delay_normal_vector(self, if_id=None):
+        """Plot the fitted AltAz delay gradients for the root GUI window.
+
+        The historical method name is retained because several GUI classes call
+        it, but the plotted quantity is no longer a 3D normal vector.
+        """
         if if_id is None:
             if_id = self.delay_if_ids[0] if self.delay_if_ids else 0
         if if_id not in self.delay_mv_result:
@@ -603,6 +646,7 @@ class Antenna:
         return fig
 
     def _refresh_delay_target_series(self):
+        """Evaluate fitted gradients at the target position and average IFs."""
         if not isinstance(self.delay_mv_result, dict):
             self.delay_average = np.array([])
             self.delay_average_t = np.array([])
@@ -636,6 +680,12 @@ class Antenna:
             self.delay_average_t = np.array([])
     
     def _correct_delay_with_phase(self, data_in, if_id):
+        """Build a phase-consistent total-delay observable for one IF.
+
+        The SN delay remains in seconds.  ``delay_scale`` converts between delay
+        and phase at the IF frequency so that the exported phase residual can
+        choose the phase-consistent delay branch before ambiguity search.
+        """
         scale = self.delay_scale.get(if_id, 1.0)
         phase_of_delay = (-data_in[f"d{if_id}"] * scale + np.pi) % (2 * np.pi) - np.pi
         delta_phase = data_in[f"p{if_id}"] - phase_of_delay

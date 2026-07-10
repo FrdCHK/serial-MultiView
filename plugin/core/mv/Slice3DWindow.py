@@ -11,6 +11,14 @@ from .Antenna import Antenna
 
 
 class Slice3DWindow:
+    """3D inspection view for one time slice of the AltAz delay plane.
+
+    The displayed plane is ``delay = grad_el * delta_el + grad_az * delta_az``
+    through the primary calibrator at ``(0, 0, 0)``.  It is a visualization of
+    the solved gradient nearest the selected slice center, not an additional
+    fit performed inside this window.
+    """
+
     def __init__(self, parent, antenna: Antenna, target, primary, secondary_calibrators, get_selected_if_id, on_close=None):
         self.parent = parent
         self.antenna = antenna
@@ -101,6 +109,7 @@ class Slice3DWindow:
         return float(t0), float(t1)
 
     def _get_center_gradient(self, if_id, slice_range):
+        """Return the solved AltAz gradient nearest the slice midpoint."""
         mv = self.antenna.delay_mv_result.get(if_id)
         mv_t = self.antenna.delay_mv_t_by_if.get(if_id, self.antenna.delay_mv_t)
         if mv is None or mv_t is None or len(mv_t) == 0:
@@ -115,6 +124,7 @@ class Slice3DWindow:
         return np.array(gradient[:2], dtype=float)
 
     def _build_plane(self, gradient, x_vals, y_vals):
+        """Create a mesh for the primary-anchored delay plane."""
         if gradient is None:
             return None, None, None
         x_min, x_max = float(np.min(x_vals)), float(np.max(x_vals))
@@ -128,6 +138,7 @@ class Slice3DWindow:
         return X, Y, Z
 
     def refresh(self):
+        """Redraw calibrator points, target projection, and fitted plane."""
         if self.antenna.original_data.empty:
             self.ax.clear()
             self.ax.text2D(0.5, 0.5, "No data available", transform=self.ax.transAxes, ha="center", va="center")

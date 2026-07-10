@@ -22,6 +22,13 @@ PARAM_HELP = {
 
 
 class ConfigWindow:
+    """Tk window for solver-wide Viterbi-Kalman parameters.
+
+    These controls affect the next explicit rerun.  Editing or resetting values
+    does not automatically recompute the solution, which keeps expensive
+    30-second solves under user control.
+    """
+
     def __init__(self, root, antenna, config, default_config=None):
         self.root = root
         self.antenna = antenna
@@ -86,6 +93,7 @@ class ConfigWindow:
         reset_button.grid(row=len(self.labels), column=0, padx=5, pady=5)
 
     def validate_save(self, root):
+        """Validate widgets and copy values into the shared config dict."""
         # clear labels
         for label in self.error_labels:
             label.config(text="")
@@ -133,6 +141,7 @@ class ConfigWindow:
         return value
 
     def _parse_entry(self, label, text):
+        """Parse one text entry using the constraints of that parameter."""
         if label == "rts_smoothing":
             return self._parse_bool(text)
         if label == "integer_states":
@@ -162,6 +171,7 @@ class ConfigWindow:
         return str(value)
 
     def reset(self):
+        """Restore defaults in the widgets/config without triggering rerun."""
         for i, text in enumerate(self.labels):
             self.config[self.labels[i]] = copy.deepcopy(self.config_bk[self.labels[i]])
             if text == "rts_smoothing":

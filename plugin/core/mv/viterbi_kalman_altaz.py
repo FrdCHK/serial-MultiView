@@ -1,12 +1,24 @@
-"""
-Viterbi-Kalman solver for serial MultiView delay gradients in AltAz space.
+"""Viterbi-Kalman solver for serial MultiView delay gradients in AltAz space.
 
-The continuous state is local-linear in time:
+This module contains the numerical part of the delay MultiView rewrite.  The
+primary calibrator is the zero point, so the fitted atmospheric delay plane has
+no intercept.  For a secondary calibrator observation at time ``t_i``:
 
-    [grad_el, grad_az, rate_grad_el, rate_grad_az]
+    y_i + n_i * ambiguity_spacing = H_i x_i + e_i
+    H_i = [delta_el_i, delta_az_i, 0, 0]
+    x_i = [g_el, g_az, dg_el_dt, dg_az_dt]
 
-Only delay observations are assimilated. The gradient rates are inferred by
-the Kalman dynamics, not read from exported SN rate columns.
+``delta_el`` and ``delta_az`` are in degrees relative to the primary
+calibrator at the same station and scan time.  ``y_i`` is the total delay in
+seconds.  The rate components are temporal derivatives of the two delay
+gradients; they are inferred from the delay time series by the state dynamics,
+not read from the exported SN rate columns.
+
+The discrete ambiguity integer ``n_i`` is persistent per secondary calibrator.
+Viterbi dynamic programming chooses the lowest-cost integer path while each
+branch carries a Kalman state estimate.  After the integer path and outliers
+are selected, a final Kalman pass and optional Rauch-Tung-Striebel smoother
+produce the state series used by the GUI and target-delay export.
 """
 from __future__ import annotations
 
@@ -26,6 +38,8 @@ iers.conf.auto_download = False
 
 @dataclass
 class ViterbiGradientSearchResult:
+    """Result of the discrete ambiguity search plus its branch Kalman states."""
+
     integer_path: np.ndarray
     integer_tuple_path: np.ndarray
     corrected_observation: np.ndarray
@@ -36,6 +50,8 @@ class ViterbiGradientSearchResult:
 
 @dataclass
 class GradientSmootherResult:
+    """Result of the final continuous-state Kalman/RTS fit."""
+
     state: np.ndarray
     covariance: np.ndarray
     fitted_observation: np.ndarray
@@ -45,6 +61,13 @@ class GradientSmootherResult:
 
 @dataclass
 class ViterbiKalmanGradientFit:
+    """Complete solver result returned to :class:`plugin.core.mv.Antenna.Antenna`.
+
+    ``state`` has columns ``[grad_el, grad_az, rate_grad_el, rate_grad_az]``.
+    The first two columns are consumed for the target delay correction; the rate
+    columns are retained so the dynamics and diagnostics remain inspectable.
+    """
+
     integer_path: np.ndarray
     integer_tuple_path: np.ndarray
     corrected_observation: np.ndarray
@@ -62,12 +85,15 @@ class ViterbiKalmanGradientFit:
 
 @dataclass
 class _Branch:
+    """One Viterbi branch: accumulated cost and latest Kalman posterior."""
+
     cost: float
     state: np.ndarray
     covariance: np.ndarray
 
 
 def huber_cost(z: float, c: float = 3.0) -> float:
+    """Robust quadratic/linear cost for a standardized residual."""
     az = abs(float(z))
     if az <= c:
         return az * az
@@ -110,10 +136,12 @@ def _validate_inputs(
 
 
 def _design_row(delta_el: float, delta_az: float) -> np.ndarray:
+    """Observation row for an intercept-free AltAz delay plane."""
     return np.array([float(delta_el), float(delta_az), 0.0, 0.0], dtype=float)
 
 
 def _state_transition(dt: float) -> np.ndarray:
+    """Constant-gradient-rate transition for time spacing ``dt`` in days."""
     return np.array([
         [1.0, 0.0, float(dt), 0.0],
         [0.0, 1.0, 0.0, float(dt)],
@@ -123,6 +151,12 @@ def _state_transition(dt: float) -> np.ndarray:
 
 
 def _process_noise(kalman_factor: float, dt: float) -> np.ndarray:
+    """Return local-linear process noise for the two gradient axes.
+
+    ``kalman_factor`` is the continuous white-noise acceleration scale for a
+    gradient random walk.  The same 2x2 position/rate block is applied to the
+    elevation-gradient and azimuth-gradient subspaces.
+    """
     dt_abs = abs(float(dt))
     q = float(kalman_factor)
     block = q * np.array([
@@ -142,6 +176,12 @@ def _process_noise(kalman_factor: float, dt: float) -> np.ndarray:
 
 
 def _initial_covariance(p0_gradient, variance: np.ndarray, delta_el: np.ndarray, delta_az: np.ndarray) -> np.ndarray:
+    """Initial covariance for gradients/rates.
+
+    When not explicitly fixed, the scale is derived from the median observation
+    variance and the typical squared angular offset.  This keeps the first
+    observation informative without requiring a public ``p0`` tuning knob.
+    """
     if p0_gradient is not None:
         p0 = float(p0_gradient)
     else:
@@ -153,6 +193,11 @@ def _initial_covariance(p0_gradient, variance: np.ndarray, delta_el: np.ndarray,
 
 
 def _scalar_update(state_pred: np.ndarray, cov_pred: np.ndarray, h: np.ndarray, y: float, r: float):
+    """Joseph-form scalar Kalman measurement update.
+
+    The Joseph covariance update is a little more expensive than the compact
+    formula, but it is more numerically stable for small delay variances.
+    """
     s = float(h @ cov_pred @ h + r)
     if not np.isfinite(s) or s <= 0.0:
         raise ValueError("Innovation covariance is not positive.")
@@ -174,6 +219,12 @@ def _validate_initial_integer(value, states: np.ndarray) -> int:
 
 
 def _initial_tuples(states: np.ndarray, sources: np.ndarray, fix_initial_integer) -> List[Tuple[int, ...]]:
+    """Build allowed initial ambiguity tuples.
+
+    A tuple stores one persistent integer per secondary calibrator.  If the GUI
+    fixes the initial integers, the Viterbi lattice starts from only that tuple;
+    otherwise all combinations in ``states`` are considered.
+    """
     n_sources = len(sources)
     if fix_initial_integer is not None:
         if isinstance(fix_initial_integer, dict):
@@ -207,6 +258,17 @@ def viterbi_gradient_search(
     fix_initial_integer=0,
     p0_gradient=None,
 ) -> ViterbiGradientSearchResult:
+    """Choose persistent per-calibrator ambiguity integers by Viterbi search.
+
+    Parameters use the same units as the module-level model.  ``integer_states``
+    is the set of allowed ambiguity integers, and ``max_jump`` limits how much
+    the integer of the currently observed calibrator may change at one step.
+
+    The observation cost is ``Huber(z) + log(S)`` by default, where ``z`` is the
+    standardized innovation and ``S`` is its variance.  ``jump_penalty`` adds a
+    fixed cost whenever the active calibrator changes integer state, favoring
+    persistent ambiguity corrections unless the data strongly prefer a slip.
+    """
     t_arr, src_arr, el_arr, az_arr, y_arr, r_arr = _validate_inputs(
         t, source_id, delta_el, delta_az, delay, variance, kalman_factor
     )
@@ -261,6 +323,8 @@ def viterbi_gradient_search(
         f_i = _state_transition(dt)
         q_i = _process_noise(kalman_factor, dt)
         current_source_idx = src_idx[i]
+        # Only the currently observed calibrator can change its integer at this
+        # observation.  Integers for the other calibrators persist in the tuple.
         for prev_tuple, prev_branch in branches.items():
             prev_source_integer = prev_tuple[current_source_idx]
             for candidate in states:
@@ -296,6 +360,7 @@ def viterbi_gradient_search(
         backpointers[i] = next_back
         histories.append(branches)
 
+    # Backtrack the cheapest final branch to recover the full integer history.
     final_tuple = min(branches, key=lambda key: branches[key].cost)
     total_cost = float(branches[final_tuple].cost)
     tuple_path: List[Tuple[int, ...]] = [final_tuple]
@@ -330,6 +395,13 @@ def kalman_filter_rts_gradient(
     p0_gradient=None,
     smooth: bool = True,
 ) -> GradientSmootherResult:
+    """Fit the continuous gradient state for a fixed ambiguity-corrected delay.
+
+    ``valid_mask`` removes outliers from measurement updates while still
+    propagating the state through their timestamps.  With ``smooth=True`` the
+    forward Kalman estimates are followed by a Rauch-Tung-Striebel backward pass
+    so each scan can use information from the whole time series.
+    """
     t_arr = _as_float_array("t", t)
     el_arr = _as_float_array("delta_el", delta_el)
     az_arr = _as_float_array("delta_az", delta_az)
@@ -426,6 +498,13 @@ def fit_viterbi_kalman_gradient(
     p0_gradient=None,
     rts_smoothing: bool = True,
 ) -> ViterbiKalmanGradientFit:
+    """Run ambiguity search, automatic outlier rejection, and final smoothing.
+
+    The integer path is re-estimated after each outlier pass because an extreme
+    point can otherwise bias both the continuous gradients and the discrete
+    ambiguity choice.  The returned ``outlier_mask`` is later converted into
+    automatic per-IF flags by :meth:`Antenna.delay_multiview`.
+    """
     t_arr, src_arr, el_arr, az_arr, y_arr, r_arr = _validate_inputs(
         t, source_id, delta_el, delta_az, delay, variance, kalman_factor
     )
@@ -459,6 +538,8 @@ def fit_viterbi_kalman_gradient(
         )
         if iteration >= max_outlier_iterations:
             break
+        # Flag only newly large standardized residuals, then repeat the full
+        # Viterbi+Kalman fit on the remaining observations.
         candidate = outliers.copy()
         candidate[valid] = np.abs(smoother.standardized_residual[valid]) > z_out
         new_outliers = candidate & ~outliers
@@ -467,6 +548,8 @@ def fit_viterbi_kalman_gradient(
         if not np.any(new_outliers):
             break
 
+    # One final pass ensures the returned state is exactly consistent with the
+    # final outlier mask, even when the loop stopped immediately after a change.
     search = viterbi_gradient_search(
         t_arr, src_arr, el_arr, az_arr, y_arr, r_arr, kalman_factor, ambiguity_spacing,
         integer_states=integer_states,
@@ -511,6 +594,13 @@ def altaz_offsets(
     obs_jd0: float,
     station_xyz: Iterable[float],
 ) -> np.ndarray:
+    """Compute source-primary AltAz offsets for each scan time.
+
+    ``station_xyz`` is geocentric ITRF-like X/Y/Z in meters.  ``times_day`` is
+    the AIPS/SN relative time in days and ``obs_jd0`` is the observation JD
+    origin.  The azimuth difference is wrapped to ``[-180, 180)`` degrees so a
+    source pair crossing north does not create a spurious large separation.
+    """
     times_arr = _as_float_array("times_day", times_day)
     xyz = np.asarray(station_xyz, dtype=float)
     if xyz.shape != (3,) or not np.all(np.isfinite(xyz)):

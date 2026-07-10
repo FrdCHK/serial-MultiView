@@ -17,6 +17,13 @@ from .Slice3DWindow import Slice3DWindow
 
 
 class AdjustWindow:
+    """Manual delay inspection/flagging window for one target and antenna.
+
+    Manual edits update the plotted data immediately, but most controls do not
+    automatically rerun the Viterbi-Kalman solver.  The user can make several
+    edits, then press the root-window rerun button once.
+    """
+
     def __init__(self, root, antenna: Antenna, config, target, primary, target_relative_position, secondary_calibrators):
         self.root = root
         self.antenna = antenna
@@ -305,6 +312,7 @@ class AdjustWindow:
             self.delay_plot()
 
     def on_reset(self):
+        """Clear manual/automatic delay edits and redraw without auto-rerun."""
         self.antenna.delay_reset()
         self.delay_plot()
         if self.slice_window is not None:
@@ -333,10 +341,12 @@ class AdjustWindow:
         self.slice_window = None
 
     def on_apply_all(self):
+        """Copy manual flags/wraps from the selected IF to all IFs."""
         self.antenna.delay_apply_manual_to_all(self.get_selected_if_id())
         self.delay_plot()
 
     def on_fix_initial_toggle(self):
+        """Enable/disable per-calibrator fixed initial ambiguity integers."""
         enabled = bool(self.fix_initial_var.get())
         self.config["fix_initial_enabled"] = enabled
         self.config.setdefault("fix_initial_values", self._fix_initial_values())
@@ -344,6 +354,7 @@ class AdjustWindow:
             self.fix_initial_button.config(state=tk.NORMAL if enabled else tk.DISABLED)
 
     def _fix_initial_values(self):
+        """Return a complete calibrator-id -> initial integer mapping."""
         raw_values = self.config.get("fix_initial_values", {}) or {}
         values = {}
         for item in self.secondary_calibrators:
@@ -352,6 +363,7 @@ class AdjustWindow:
         return values
 
     def _allowed_initial_integers(self):
+        """Return the integer set implied by the public ``integer_states`` radius."""
         states = self.config.get("integer_states", self.config.get("viterbi_integer_states", 3))
         if isinstance(states, str):
             states = ast.literal_eval(states)
@@ -361,6 +373,7 @@ class AdjustWindow:
         return {int(item) for item in states}
 
     def open_fix_initial_window(self):
+        """Open the small per-calibrator initial-ambiguity editor."""
         if self.fix_initial_window is not None:
             try:
                 self.fix_initial_window.lift()

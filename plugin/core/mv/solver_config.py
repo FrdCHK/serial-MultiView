@@ -1,4 +1,13 @@
-"""Shared defaults for the AltAz Viterbi-Kalman MultiView solver."""
+"""Shared defaults and GUI-to-solver parameter translation.
+
+The GUI and YAML files intentionally expose short parameter names such as
+``integer_states`` and ``max_jump``.  The numerical solver keeps the longer
+``viterbi_*`` argument names because those names describe the algorithmic
+role at the call site in :mod:`plugin.core.mv.Antenna`.
+
+Only relative covariance scaling matters for the current MV outputs, so a few
+low-level controls stay fixed here instead of appearing in the config window.
+"""
 
 import copy
 
@@ -27,6 +36,8 @@ ADJUST_DEFAULTS = {
 
 SOLVER_KEYS = list(SOLVER_DEFAULTS.keys())
 
+# Older saved configs used viterbi_* public names.  Keep loading them so users
+# can reopen old SAVE directories without hand-editing YAML files.
 LEGACY_CONFIG_KEYS = {
     "viterbi_integer_states": "integer_states",
     "viterbi_max_jump": "max_jump",
@@ -47,6 +58,12 @@ SOLVER_ARG_NAMES = {
 
 
 def apply_solver_defaults(config):
+    """Mutate ``config`` in place so it contains the current public keys.
+
+    Returns the same dict for convenient call chaining.  Fixed solver controls
+    are removed from user config because they are no longer meant to be edited
+    through YAML or the config window.
+    """
     for key in FIXED_SOLVER_DEFAULTS:
         config.pop(key, None)
     for legacy_key, new_key in LEGACY_CONFIG_KEYS.items():
@@ -60,6 +77,12 @@ def apply_solver_defaults(config):
 
 
 def _initial_integer_setting(config):
+    """Return the initial ambiguity constraint expected by the solver.
+
+    ``fix_initial_enabled=False`` means every secondary calibrator starts with
+    ambiguity integer zero.  When enabled, ``fix_initial_values`` may contain a
+    sparse per-calibrator map; missing calibrators also default to zero.
+    """
     if not bool(config.get("fix_initial_enabled", False)):
         return 0
     values = config.get("fix_initial_values", {})
@@ -69,6 +92,12 @@ def _initial_integer_setting(config):
 
 
 def solver_kwargs(config):
+    """Build keyword arguments for :meth:`Antenna.delay_multiview`.
+
+    This is the single bridge from persisted/GUI config to the solver-facing
+    API.  Keeping it centralized prevents stale names from spreading through
+    GUI callbacks and template rendering.
+    """
     apply_solver_defaults(config)
     kwargs = {SOLVER_ARG_NAMES.get(key, key): config[key] for key in SOLVER_KEYS}
     kwargs.update(copy.deepcopy(FIXED_SOLVER_DEFAULTS))

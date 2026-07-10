@@ -16,6 +16,12 @@ from .solver_config import apply_solver_defaults, solver_kwargs
 
 
 class RootWindow:
+    """Main MV window for one target/antenna pair.
+
+    It owns the saved adjustment/config paths, the compact gradient plot, and
+    the explicit rerun button that drives the long AltAz Viterbi-Kalman solve.
+    """
+
     def __init__(self, target, antenna, config):
         self.target = target
         self.antenna = antenna
@@ -119,6 +125,11 @@ class RootWindow:
         plt.close('all')
 
     def root_normal_vector_plot(self):
+        """Refresh the root-window gradient plot.
+
+        The method name is kept for compatibility with older GUI code; the plot
+        now shows AltAz delay gradients, not normal-vector components.
+        """
         if not isinstance(self.antenna.delay_mv_result, dict) or not self.antenna.delay_mv_result:
             return
         if self.present_fig is not None:
@@ -131,6 +142,7 @@ class RootWindow:
         self.present_fig = fig
 
     def rerun(self, adjust=True, show_progress=True):
+        """Run the solver, optionally showing progress and refreshing windows."""
         kwargs = solver_kwargs(self.config)
         progress_window = ProgressWindow(self.root, "MultiView calculation") if show_progress else None
         if progress_window is not None:
@@ -147,6 +159,7 @@ class RootWindow:
                 self.adjust_window.slice_window.refresh()
 
     def load(self, do_rerun=True):
+        """Load saved manual edits/config and optionally recompute the solution."""
         self.antenna.delay_auto_reset()
         with open(self.conf_dir, 'r') as f:
             config_load = yaml.safe_load(f) or {}

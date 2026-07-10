@@ -1,12 +1,18 @@
-"""
-Small progress dialog for long MultiView calculations.
-"""
+"""Small progress dialog for long MultiView calculations."""
 import tkinter as tk
 from tkinter import ttk
 
 
 class ProgressWindow:
+    """Modal Tk dialog driven by ``Antenna.delay_multiview`` progress callbacks.
+
+    The solver runs in the GUI thread, so ``update`` explicitly flushes Tk idle
+    work after changing the label/progressbar.  That keeps the window responsive
+    during the roughly tens-of-seconds initial solve and rerun operations.
+    """
+
     def __init__(self, parent, title="Calculating"):
+        """Create a non-closable progress popup attached to ``parent``."""
         self.parent = parent
         self.window = tk.Toplevel(parent)
         self.window.title(title)
@@ -25,6 +31,7 @@ class ProgressWindow:
         self.update("Starting...", 0, 1)
 
     def update(self, message, current=None, total=None):
+        """Set the current step text and, when possible, determinate progress."""
         self.label.config(text=message)
         if total is not None and total > 0 and current is not None:
             self.progress.config(mode="determinate", maximum=float(total))
@@ -33,6 +40,7 @@ class ProgressWindow:
         self.window.update()
 
     def close(self):
+        """Release the modal grab and destroy the popup."""
         try:
             self.window.grab_release()
         except tk.TclError:
