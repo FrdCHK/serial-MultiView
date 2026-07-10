@@ -60,7 +60,7 @@ class ConfigWindow:
         self.tip_window = None
 
         for i, text in enumerate(self.labels):
-            label = tk.Label(self.window, text=text+':', width=18, anchor="e", font=self.font,
+            label = tk.Label(self.window, text=text+':', width=24, anchor="e", font=self.font,
                              cursor="question_arrow")
             label.grid(row=i, column=0, padx=5, pady=5)
             label.bind("<Enter>", lambda event, key=text: self._show_tip(key, event))
