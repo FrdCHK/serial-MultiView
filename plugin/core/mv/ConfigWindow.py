@@ -15,6 +15,7 @@ PARAM_HELP = {
     "kalman_factor": "Continuous process-noise scale for delay gradients and their rates.",
     "rts_smoothing": "Run the backward RTS smoother after the forward Kalman pass.",
     "elevation_mapping": "Elevation coordinate: linear uses delta elevation; cosecant uses csc(el)-csc(primary).",
+    "separation_noise": "Extra unitless noise per degree of source-primary separation. Default 0 disables it.",
     "integer_states": "Integer ambiguity search radius n. Default 3 searches [-3, ..., 3].",
     "max_jump": "Maximum ambiguity change between adjacent observations of the same calibrator. Default 1.",
     "jump_penalty": "Cost for an ambiguity jump. Default 25 strongly discourages isolated false slips.",
@@ -44,8 +45,8 @@ class ConfigWindow:
 
         self.window = tk.Toplevel(root.root)
         self.window.title("CONFIG")
-        self.window.geometry("532x360+67+660")
-        self.window.minsize(width=532, height=360)
+        self.window.geometry("532x400+67+660")
+        self.window.minsize(width=532, height=400)
 
         self.window.grid_columnconfigure(0, weight=1)
         self.window.grid_columnconfigure(1, weight=1)
@@ -168,10 +169,12 @@ class ConfigWindow:
                 raise ValueError("invalid int")
             return value
         value = float(text)
-        if value <= 0.0 and label not in ("jump_penalty",):
+        if label in ("jump_penalty", "separation_noise"):
+            if value < 0.0:
+                raise ValueError("invalid non-negative float")
+            return value
+        if value <= 0.0:
             raise ValueError("invalid positive float")
-        if label == "jump_penalty" and value < 0.0:
-            raise ValueError("invalid penalty")
         return value
 
     @staticmethod

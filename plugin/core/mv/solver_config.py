@@ -18,6 +18,7 @@ SOLVER_DEFAULTS = {
     "kalman_factor": 1.0e-14,
     "rts_smoothing": True,
     "elevation_mapping": "linear",
+    "separation_noise": 0.0,
     "integer_states": 3,
     "max_jump": 1,
     "jump_penalty": 25.0,

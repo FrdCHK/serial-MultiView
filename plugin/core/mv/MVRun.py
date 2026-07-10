@@ -24,7 +24,7 @@ class MVRun(Plugin):
         return "Run serial MultiView GUI and save per-antenna adjustments and results. " \
                "Plugins required: MVSnExport, MVPrimaryCalibratorSelect. " \
                "Parameters optional: kalman_factor, rts_smoothing, elevation_mapping, " \
-               "integer_states, max_jump, jump_penalty, huber_c, and z_out."
+               "separation_noise, integer_states, max_jump, jump_penalty, huber_c, and z_out."
 
     def run(self, context: Context) -> bool:
         context.logger.info("Start MultiView GUI run")

@@ -58,15 +58,24 @@ delay in seconds.  The exported delay column remains the delay observable; the
 exported phase is used only to select the phase-consistent branch before the
 ambiguity search.
 
-The observation variance is:
+The base observation variance is set by the SN weight.  An optional
+separation-dependent noise term can be added to reduce the leverage of distant
+secondary calibrators:
 
 ```text
-R_i = unit_weight_variance / SN_weight_i
+theta_i = sqrt(delta_el_linear_i^2 + delta_az_i^2)
+R_i = unit_weight_variance * (1 / SN_weight_i + (separation_noise * theta_i)^2)
 ```
+
+`theta_i` is always the true linear angular separation in degrees, even when
+`elevation_mapping = cosecant`.  `separation_noise` is a dimensionless tuning
+coefficient relative to `unit_weight_variance`; `0.0` disables this term and
+recovers the previous `unit_weight_variance / SN_weight_i` behavior.
 
 Rows with missing values, non-finite offsets, or non-positive weights are
 skipped.  `unit_weight_variance` is fixed internally because the current output
-does not use absolute posterior variances; relative SN weights are what matter.
+does not use absolute posterior variances; relative SN weights and relative
+separation penalties are what matter.
 
 The delay ambiguity spacing for IF `k` is:
 
@@ -188,6 +197,8 @@ window:
   pass.
 - `elevation_mapping`: `linear` or `cosecant`; invalid strings fall back to
   `linear`.
+- `separation_noise`: unitless angular-separation noise coefficient; default
+  `0.0` preserves the old SN-weight-only variance.
 - `integer_states`: integer search radius `n`, expanded to `[-n, ..., n]`.
 - `max_jump`: maximum ambiguity-integer change allowed for one calibrator step.
 - `jump_penalty`: fixed Viterbi cost added when an ambiguity integer changes.

@@ -14,6 +14,7 @@ from typing import List
 
 from .Calibrator import Calibrator
 from .elevation_mapping import (
+    LINEAR_ELEVATION_MAPPING,
     elevation_axis_label,
     elevation_coordinate_label,
     gradient_axis_label,
@@ -231,6 +232,7 @@ class Antenna:
         data_out = data_in.copy(deep=True)
         data_out["delta_el"] = np.nan
         data_out["delta_az"] = np.nan
+        data_out["theta_deg"] = np.nan
         if data_out.empty:
             return data_out
         for calsour in data_out["calsour"].dropna().unique():
@@ -239,12 +241,31 @@ class Antenna:
                 continue
             mask = data_out["calsour"].astype(int) == int(calsour)
             offsets = self.source_altaz_offsets(source, data_out.loc[mask, "t"].to_numpy(), elevation_mapping)
+            linear_offsets = offsets
+            if normalize_elevation_mapping(elevation_mapping) != LINEAR_ELEVATION_MAPPING:
+                linear_offsets = self.source_altaz_offsets(
+                    source,
+                    data_out.loc[mask, "t"].to_numpy(),
+                    LINEAR_ELEVATION_MAPPING,
+                )
             data_out.loc[mask, ["delta_el", "delta_az"]] = offsets
+            data_out.loc[mask, "theta_deg"] = np.hypot(linear_offsets[:, 0], linear_offsets[:, 1])
         return data_out
 
     def elevation_axis_label(self):
         """Return the first-coordinate label for plots."""
         return elevation_axis_label(self.elevation_mapping)
+
+    @staticmethod
+    def effective_delay_variance(unit_weight_variance, weight, theta_deg, separation_noise=0.0):
+        """Observation variance including optional separation-dependent noise."""
+        separation_noise = float(separation_noise)
+        if separation_noise < 0.0:
+            raise ValueError("separation_noise must be >= 0.")
+        return float(unit_weight_variance) * (
+            1.0 / np.asarray(weight, dtype=float)
+            + (separation_noise * np.asarray(theta_deg, dtype=float)) ** 2
+        )
 
     def delay_multiview(
         self,
@@ -261,6 +282,7 @@ class Antenna:
         viterbi_fix_initial_integer=0,
         viterbi_p0_gradient=None,
         elevation_mapping="linear",
+        separation_noise=0.0,
         progress_callback=None,
     ):
         """
@@ -273,10 +295,11 @@ class Antenna:
 
             [grad_el, grad_az, rate_grad_el, rate_grad_az].
 
-        ``unit_weight_variance / weight`` is used as the scalar observation
-        variance.  ``unit_weight_variance`` is kept fixed by ``solver_config``
-        because only relative weights matter for the current exported MV delay.
-        The ambiguity spacing is one IF phase wrap, ``1 / if_freq_hz``.
+        The scalar observation variance is built from SN weight plus an optional
+        separation-dependent term.  ``unit_weight_variance`` is kept fixed by
+        ``solver_config`` because only relative weights matter for the current
+        exported MV delay.  The ambiguity spacing is one IF phase wrap,
+        ``1 / if_freq_hz``.
 
         The returned gradients are evaluated at the target AltAz offset for the
         same times, then the IF-specific target delays are interpolated to the
@@ -327,6 +350,9 @@ class Antenna:
         viterbi_fix_initial_integer = self._parse_initial_integer(viterbi_fix_initial_integer)
         viterbi_p0_gradient = self._parse_optional(viterbi_p0_gradient, float)
         self.elevation_mapping = normalize_elevation_mapping(elevation_mapping)
+        separation_noise = float(separation_noise)
+        if separation_noise < 0.0:
+            raise ValueError("separation_noise must be >= 0.")
 
         delay_results = {}
         delay_t_by_if = {}
@@ -353,6 +379,7 @@ class Antenna:
                 & (data_view["weight"].to_numpy(dtype=float) > 0.0)
                 & np.isfinite(data_view["delta_el"].to_numpy(dtype=float))
                 & np.isfinite(data_view["delta_az"].to_numpy(dtype=float))
+                & np.isfinite(data_view["theta_deg"].to_numpy(dtype=float))
             )
             data_view = data_view.loc[finite].copy(deep=True)
             data_view.reset_index(drop=True, inplace=True)
@@ -367,7 +394,12 @@ class Antenna:
 
             data_solve = data_view.iloc[::-1].copy(deep=True) if self.reverse else data_view
             ambiguity_spacing = 1.0 / (self.if_freq.get(if_id, 1.0) * 1e9)
-            variance = unit_weight_variance / data_solve["weight"].to_numpy(dtype=float)
+            variance = self.effective_delay_variance(
+                unit_weight_variance,
+                data_solve["weight"].to_numpy(dtype=float),
+                data_solve["theta_deg"].to_numpy(dtype=float),
+                separation_noise,
+            )
             fit = fit_viterbi_kalman_gradient(
                 data_solve["t"].to_numpy(dtype=float),
                 data_solve["calsour"].to_numpy(dtype=int),

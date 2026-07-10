@@ -1,5 +1,6 @@
 import unittest
 import os
+from types import SimpleNamespace
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib-mv-tests")
 
@@ -53,6 +54,41 @@ class ElevationMappingTest(unittest.TestCase):
 
         self.assertEqual(config["elevation_mapping"], LINEAR_ELEVATION_MAPPING)
         self.assertEqual(kwargs["elevation_mapping"], LINEAR_ELEVATION_MAPPING)
+        self.assertEqual(kwargs["separation_noise"], 0.0)
+
+    def test_effective_delay_variance_uses_separation_noise(self):
+        weight = np.array([4.0, 1.0])
+        theta = np.array([3.0, 5.0])
+        unit_weight_variance = 2.0
+
+        no_sep = Antenna.effective_delay_variance(unit_weight_variance, weight, theta, 0.0)
+        with_sep = Antenna.effective_delay_variance(unit_weight_variance, weight, theta, 0.1)
+
+        np.testing.assert_allclose(no_sep, unit_weight_variance / weight)
+        np.testing.assert_allclose(
+            with_sep,
+            unit_weight_variance * (1.0 / weight + (0.1 * theta) ** 2),
+        )
+        with self.assertRaises(ValueError):
+            Antenna.effective_delay_variance(unit_weight_variance, weight, theta, -0.1)
+
+    def test_theta_deg_uses_linear_offsets_when_mapping_is_cosecant(self):
+        calibrator = SimpleNamespace(id=1, dx=0.0, dy=0.0)
+        antenna = Antenna(1, "TEST", data=pd.DataFrame(), calibrators=[calibrator], no_if=1)
+
+        def fake_offsets(_source, times, elevation_mapping=None):
+            if elevation_mapping == COSECANT_ELEVATION_MAPPING:
+                return np.column_stack([np.full(len(times), 99.0), np.full(len(times), 4.0)])
+            return np.column_stack([np.full(len(times), 3.0), np.full(len(times), 4.0)])
+
+        antenna.source_altaz_offsets = fake_offsets
+        data = pd.DataFrame({"calsour": [1, 1], "t": [0.0, 1.0]})
+
+        mapped = antenna.add_altaz_offsets(data, COSECANT_ELEVATION_MAPPING)
+
+        np.testing.assert_allclose(mapped["delta_el"].to_numpy(), np.array([99.0, 99.0]))
+        np.testing.assert_allclose(mapped["delta_az"].to_numpy(), np.array([4.0, 4.0]))
+        np.testing.assert_allclose(mapped["theta_deg"].to_numpy(), np.array([5.0, 5.0]))
 
     def test_target_correction_uses_current_mapping(self):
         antenna = Antenna(1, "TEST", data=pd.DataFrame(), calibrators=[], no_if=1)
