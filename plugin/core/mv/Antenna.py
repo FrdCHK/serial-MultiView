@@ -226,7 +226,13 @@ class Antenna:
         )
 
     def add_altaz_offsets(self, data_in, elevation_mapping=None):
-        """Add per-row solver coordinates for secondary calibrator observations."""
+        """Add per-row solver coordinates and true angular separation.
+
+        ``delta_el`` stores the selected first coordinate, which may be raw
+        cosecant elevation.  ``theta_deg`` is always computed from ordinary
+        linear AltAz offsets so separation-dependent weighting remains tied to
+        real source-primary angular distance.
+        """
         if elevation_mapping is None:
             elevation_mapping = self.elevation_mapping
         data_out = data_in.copy(deep=True)
@@ -243,6 +249,8 @@ class Antenna:
             offsets = self.source_altaz_offsets(source, data_out.loc[mask, "t"].to_numpy(), elevation_mapping)
             linear_offsets = offsets
             if normalize_elevation_mapping(elevation_mapping) != LINEAR_ELEVATION_MAPPING:
+                # The solver coordinate may be non-linear, but reliability
+                # weighting should use true angular separation in degrees.
                 linear_offsets = self.source_altaz_offsets(
                     source,
                     data_out.loc[mask, "t"].to_numpy(),
@@ -258,7 +266,15 @@ class Antenna:
 
     @staticmethod
     def effective_delay_variance(unit_weight_variance, weight, theta_deg, separation_noise=0.0):
-        """Observation variance including optional separation-dependent noise."""
+        """Observation variance including optional separation-dependent noise.
+
+        Formula:
+
+            unit_weight_variance * (1 / weight + (separation_noise * theta_deg)^2)
+
+        ``separation_noise`` is unitless relative to ``unit_weight_variance``;
+        setting it to zero recovers the previous SN-weight-only variance.
+        """
         separation_noise = float(separation_noise)
         if separation_noise < 0.0:
             raise ValueError("separation_noise must be >= 0.")
@@ -296,10 +312,10 @@ class Antenna:
             [grad_el, grad_az, rate_grad_el, rate_grad_az].
 
         The scalar observation variance is built from SN weight plus an optional
-        separation-dependent term.  ``unit_weight_variance`` is kept fixed by
-        ``solver_config`` because only relative weights matter for the current
-        exported MV delay.  The ambiguity spacing is one IF phase wrap,
-        ``1 / if_freq_hz``.
+        separation-dependent term based on true linear angular separation.
+        ``unit_weight_variance`` is kept fixed by ``solver_config`` because only
+        relative weights matter for the current exported MV delay.  The
+        ambiguity spacing is one IF phase wrap, ``1 / if_freq_hz``.
 
         The returned gradients are evaluated at the target AltAz offset for the
         same times, then the IF-specific target delays are interpolated to the
@@ -703,7 +719,7 @@ class Antenna:
         ax.set_xlabel("time (day)")
         ax.set_ylabel(gradient_axis_label(self.elevation_mapping))
         ax.legend()
-        ax.set_title(f"AltAz Delay Gradients (IF{if_id + 1})")
+        ax.set_title(f"Mapped AltAz Delay Gradients (IF{if_id + 1})")
         return fig
 
     def _refresh_delay_target_series(self):

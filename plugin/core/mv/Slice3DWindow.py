@@ -17,7 +17,9 @@ class Slice3DWindow:
     through the primary calibrator at ``(0, 0, 0)``.  ``x_el`` is either linear
     elevation difference or raw cosecant-elevation difference, matching the
     current solver config.  This is a visualization of the solved gradient
-    nearest the selected slice center, not an additional fit.
+    nearest the selected slice center, not an additional fit.  X and Y keep
+    their independent numeric limits, but their visual axis lengths are equal so
+    mixed units remain readable.
     """
 
     def __init__(self, parent, antenna: Antenna, target, primary, secondary_calibrators, get_selected_if_id, on_close=None):
@@ -260,7 +262,7 @@ class Slice3DWindow:
         self.ax.set_xlabel(self.antenna.elevation_axis_label())
         self.ax.set_ylabel("Delta azimuth (deg)")
         self.ax.set_zlabel("Delay (ps)")
-        self.ax.set_title(f"AltAz slice IF{if_id + 1}: {slice_range[0]:.6f} - {slice_range[1]:.6f}")
+        self.ax.set_title(f"Mapped AltAz slice IF{if_id + 1}: {slice_range[0]:.6f} - {slice_range[1]:.6f}")
         self.ax.legend(loc="upper left", fontsize=8)
         self.canvas.draw_idle()
 

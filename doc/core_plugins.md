@@ -43,7 +43,7 @@ These are thin wrappers around AIPSTask. All log start/end and register SN/CL ta
 - `MVPrimaryFringeFitting`: FRING primary calibrator and apply to all sources.
 - `MVSecondaryFringeFitting`: FRING secondary calibrators only.
 - `MVSnExport`: export SN phase, delay, rate, and weight columns for MV.
-- `MVRun`: MultiView GUI workflow. Delay MV uses the primary calibrator as the zero point and solves per-IF mapped-elevation/AltAz delay gradients with the Viterbi-Kalman/RTS model described in `doc/mv_viterbi_kalman_altaz.md`.
+- `MVRun`: MultiView GUI workflow. Delay MV uses the primary calibrator as the zero point and solves per-IF mapped-elevation/AltAz delay gradients with optional cosecant elevation mapping and separation-dependent weighting; see `doc/mv_viterbi_kalman_altaz.md`.
 - `MVPostProcess`: import the saved `t, mbdelay` MV delay correction, then SPLIT/UVFLG/IMAGR/JMFIT/FITTP and summary.
 
 ## Self‑cal workflow

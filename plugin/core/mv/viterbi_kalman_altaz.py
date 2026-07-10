@@ -16,6 +16,11 @@ delay in seconds.  The rate components are temporal derivatives of the two
 delay gradients; they are inferred from the delay time series by the state
 dynamics, not read from the exported SN rate columns.
 
+The observation variance supplied by :class:`Antenna` may include both exported
+SN weight and an angular-separation penalty.  This module treats that variance
+as already constructed and uses it consistently in the Viterbi cost, Kalman
+updates, outlier tests, and RTS smoothing.
+
 The discrete ambiguity integer ``n_i`` is persistent per secondary calibrator.
 Viterbi dynamic programming chooses the lowest-cost integer path while each
 branch carries a Kalman state estimate.  After the integer path and outliers

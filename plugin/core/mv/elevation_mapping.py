@@ -1,4 +1,11 @@
-"""Elevation-coordinate mappings for primary-relative delay MultiView."""
+"""Elevation-coordinate mappings for primary-relative delay MultiView.
+
+The solver always fits an intercept-free plane through the primary calibrator.
+These helpers only choose the first design-matrix coordinate; the azimuth
+coordinate remains a wrapped degree difference.  Linear elevation offsets are
+also used separately to compute true angular separation for optional
+separation-dependent weighting.
+"""
 
 import numpy as np
 
@@ -27,7 +34,9 @@ def mapped_elevation_offset(source_alt_deg, primary_alt_deg, mapping=LINEAR_ELEV
 
     ``linear`` returns the ordinary elevation difference in degrees.  ``cosecant``
     returns the raw slant-path mapping difference, ``csc(el_source) -
-    csc(el_primary)``.  Any invalid mapping name is treated as ``linear``.
+    csc(el_primary)``.  Any invalid mapping name is treated as ``linear``.  The
+    raw cosecant form intentionally changes the gradient unit from seconds per
+    degree to seconds per cosecant-unit.
     """
     source_alt = np.asarray(source_alt_deg, dtype=float)
     primary_alt = np.asarray(primary_alt_deg, dtype=float)

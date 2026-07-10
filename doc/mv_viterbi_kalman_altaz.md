@@ -1,4 +1,4 @@
-# AltAz Viterbi-Kalman MultiView
+# Mapped-Elevation AltAz Viterbi-Kalman MultiView
 
 This document describes the current serial MultiView delay implementation in
 `plugin/core/mv`.  It replaces the older recursive normal-vector solver with a
@@ -70,7 +70,10 @@ R_i = unit_weight_variance * (1 / SN_weight_i + (separation_noise * theta_i)^2)
 `theta_i` is always the true linear angular separation in degrees, even when
 `elevation_mapping = cosecant`.  `separation_noise` is a dimensionless tuning
 coefficient relative to `unit_weight_variance`; `0.0` disables this term and
-recovers the previous `unit_weight_variance / SN_weight_i` behavior.
+recovers the previous `unit_weight_variance / SN_weight_i` behavior.  Positive
+values make distant secondary calibrators less able to dominate the gradient
+fit or force the Viterbi ambiguity path, while close calibrators retain their
+SN-weight-driven influence.
 
 Rows with missing values, non-finite offsets, or non-positive weights are
 skipped.  `unit_weight_variance` is fixed internally because the current output
@@ -234,7 +237,7 @@ Older saved configs containing `viterbi_*` keys are migrated when loaded.
 - `plugin/core/mv/AdjustWindow.py`: manual flags/wraps, IF selection, time flags,
   initial ambiguity editor, and delay plot.
 - `plugin/core/mv/Slice3DWindow.py`: 3D time-slice visualization of the
-  primary-anchored AltAz delay plane.
+  primary-anchored mapped-elevation/AltAz delay plane.
 - `plugin/core/mv/ProgressWindow.py`: modal progress dialog for initial solve
   and rerun.
 
@@ -249,6 +252,12 @@ edits and parameters to be used.
 During first run and rerun, a small progress dialog reports preparation,
 per-IF fitting, result storage, target correction, and completion.  It closes
 automatically after the solve finishes.
+
+The 3D slice window visualizes the fitted plane at the selected time range as
+`delay = grad_el * x_el + grad_az * delta_az`.  X and Y keep their independent
+numeric data limits, but their visual axis lengths are forced equal so cosecant
+elevation and azimuth degrees remain readable on the same plot.  Right-drag
+continues to adjust only the Z aspect.
 
 ## Saved Files
 

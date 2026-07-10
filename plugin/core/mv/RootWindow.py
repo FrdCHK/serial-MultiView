@@ -19,7 +19,8 @@ class RootWindow:
     """Main MV window for one target/antenna pair.
 
     It owns the saved adjustment/config paths, the compact gradient plot, and
-    the explicit rerun button that drives the long AltAz Viterbi-Kalman solve.
+    the explicit rerun button that drives the long mapped-elevation/AltAz
+    Viterbi-Kalman solve.
     """
 
     def __init__(self, target, antenna, config):

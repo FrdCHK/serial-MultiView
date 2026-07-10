@@ -23,6 +23,7 @@ class MVRun(Plugin):
     def get_description(cls) -> str:
         return "Run serial MultiView GUI and save per-antenna adjustments and results. " \
                "Plugins required: MVSnExport, MVPrimaryCalibratorSelect. " \
+               "Delay MV solves mapped-elevation/AltAz gradients. " \
                "Parameters optional: kalman_factor, rts_smoothing, elevation_mapping, " \
                "separation_noise, integer_states, max_jump, jump_penalty, huber_c, and z_out."
 
