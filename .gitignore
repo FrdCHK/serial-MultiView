@@ -10,3 +10,10 @@ pytest.ini
 !log/.gitkeep
 .codex
 AGENTS.md
+
+# Generated Viterbi-Kalman-RTS schematics (PDF artifacts are tracked)
+doc/generate_viterbi_kalman_rts_schematic.py
+doc/viterbi_kalman_rts_overview.png
+doc/viterbi_kalman_rts_overview.svg
+doc/viterbi_kalman_rts_detailed.png
+doc/viterbi_kalman_rts_detailed.svg
