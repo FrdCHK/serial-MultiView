@@ -1,8 +1,20 @@
 import argparse
+import copy
 import yaml
 from jinja2 import Environment, FileSystemLoader
 
+from core.solver_config_compat import migrate_legacy_solver_config
 from util.path_input import path_input
+
+
+def render_control(template_path, config):
+    """Render one control file after migrating legacy public solver keys."""
+
+    render_config = copy.deepcopy(config or {})
+    migrate_legacy_solver_config(render_config)
+    env = Environment(loader=FileSystemLoader('.'), trim_blocks=True)
+    template = env.get_template(template_path)
+    return template.render(**render_config, config=render_config)
 
 
 if __name__ == "__main__":
@@ -18,14 +30,10 @@ if __name__ == "__main__":
     if args.control is None:
         args.control = path_input("Please specify output control file path", "file")
 
-    env = Environment(loader=FileSystemLoader('.'), trim_blocks=True)
-
-    template = env.get_template(args.template)
-
     with open(args.config, 'r') as file:
         config = yaml.safe_load(file)
 
-    control = template.render(**config, config=config)
+    control = render_control(args.template, config)
     with open(args.control, 'w') as file:
         file.write(control)
     print(f"Success: control file written to {args.control}")

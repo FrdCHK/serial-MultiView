@@ -11,6 +11,11 @@ low-level controls stay fixed here instead of appearing in the config window.
 
 import copy
 
+from core.solver_config_compat import (
+    LEGACY_CONFIG_KEYS,
+    migrate_legacy_solver_config,
+    solver_value_missing,
+)
 from .elevation_mapping import normalize_elevation_mapping
 
 
@@ -19,6 +24,7 @@ SOLVER_DEFAULTS = {
     "rts_smoothing": True,
     "elevation_mapping": "linear",
     "separation_noise": 0.0,
+    "parallel_workers": 0,
     "integer_states": 3,
     "max_jump": 1,
     "jump_penalty": 25.0,
@@ -40,18 +46,6 @@ ADJUST_DEFAULTS = {
 
 SOLVER_KEYS = list(SOLVER_DEFAULTS.keys())
 
-# Older saved configs used viterbi_* public names.  Keep loading them so users
-# can reopen old SAVE directories without hand-editing YAML files.
-LEGACY_CONFIG_KEYS = {
-    "viterbi_integer_states": "integer_states",
-    "viterbi_max_jump": "max_jump",
-    "viterbi_jump_penalty": "jump_penalty",
-    "viterbi_huber_c": "huber_c",
-    "viterbi_z_out": "z_out",
-    "viterbi_fix_initial_enabled": "fix_initial_enabled",
-    "viterbi_fix_initial_values": "fix_initial_values",
-}
-
 SOLVER_ARG_NAMES = {
     "integer_states": "viterbi_integer_states",
     "max_jump": "viterbi_max_jump",
@@ -70,11 +64,12 @@ def apply_solver_defaults(config):
     """
     for key in FIXED_SOLVER_DEFAULTS:
         config.pop(key, None)
-    for legacy_key, new_key in LEGACY_CONFIG_KEYS.items():
-        if legacy_key in config:
-            config.setdefault(new_key, config.pop(legacy_key))
+    migrate_legacy_solver_config(config)
     for key, value in SOLVER_DEFAULTS.items():
-        config.setdefault(key, copy.deepcopy(value))
+        current = config.get(key)
+        missing = solver_value_missing(current)
+        if key not in config or missing:
+            config[key] = copy.deepcopy(value)
     config["elevation_mapping"] = normalize_elevation_mapping(config.get("elevation_mapping"))
     for key, value in ADJUST_DEFAULTS.items():
         config.setdefault(key, copy.deepcopy(value))

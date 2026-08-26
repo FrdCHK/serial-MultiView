@@ -16,6 +16,7 @@ PARAM_HELP = {
     "rts_smoothing": "Run the backward RTS smoother after the forward Kalman pass.",
     "elevation_mapping": "Elevation coordinate: linear uses delta elevation; cosecant uses csc(el)-csc(primary).",
     "separation_noise": "Extra unitless noise per degree of source-primary separation. Default 0 disables it.",
+    "parallel_workers": "Simultaneous IF solves. Default 0 uses an automatic CPU-aware limit.",
     "integer_states": "Integer ambiguity search radius n. Default 3 searches [-3, ..., 3].",
     "max_jump": "Maximum ambiguity change between adjacent observations of the same calibrator. Default 1.",
     "jump_penalty": "Cost for an ambiguity jump. Default 25 strongly discourages isolated false slips.",
@@ -45,8 +46,8 @@ class ConfigWindow:
 
         self.window = tk.Toplevel(root.root)
         self.window.title("CONFIG")
-        self.window.geometry("532x400+67+660")
-        self.window.minsize(width=532, height=400)
+        self.window.geometry("532x440+67+660")
+        self.window.minsize(width=532, height=440)
 
         self.window.grid_columnconfigure(0, weight=1)
         self.window.grid_columnconfigure(1, weight=1)
@@ -167,6 +168,11 @@ class ConfigWindow:
             value = int(text)
             if value < 0:
                 raise ValueError("invalid int")
+            return value
+        if label == "parallel_workers":
+            value = int(text)
+            if value < 0:
+                raise ValueError("invalid worker count")
             return value
         value = float(text)
         if label in ("jump_penalty", "separation_noise"):

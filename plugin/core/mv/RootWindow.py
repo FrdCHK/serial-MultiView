@@ -4,9 +4,11 @@ root window of GUI
 @DATE  : 2024/8/6
 """
 import os
+import queue
+import threading
 import pandas as pd
 import tkinter as tk
-from tkinter import font
+from tkinter import font, messagebox
 import matplotlib.pyplot as plt
 import yaml
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -146,19 +148,72 @@ class RootWindow:
     def rerun(self, adjust=True, show_progress=True):
         """Run the solver, optionally showing progress and refreshing windows."""
         kwargs = solver_kwargs(self.config)
-        progress_window = ProgressWindow(self.root, "MultiView calculation") if show_progress else None
-        if progress_window is not None:
-            kwargs["progress_callback"] = progress_window.update
-        try:
+        if show_progress:
+            self._run_solver_with_progress(kwargs)
+        else:
             self.antenna.delay_multiview(**kwargs)
-        finally:
-            if progress_window is not None:
-                progress_window.close()
         self.root_normal_vector_plot()
         if adjust and self.adjust_window is not None:
             self.adjust_window.delay_plot()
             if getattr(self.adjust_window, "slice_window", None) is not None:
                 self.adjust_window.slice_window.refresh()
+
+    def _run_solver_with_progress(self, kwargs):
+        """Coordinate the solver off-thread while Tk drains progress events."""
+
+        progress_window = ProgressWindow(
+            self.root,
+            self.antenna.delay_if_ids,
+            "MultiView calculation",
+        )
+        event_queue = queue.Queue()
+        finished = tk.BooleanVar(master=self.root, value=False)
+        outcome = {}
+
+        def solver_progress(event):
+            event_queue.put(("progress", event))
+
+        def solve():
+            try:
+                self.antenna.delay_multiview(progress_callback=solver_progress, **kwargs)
+            except BaseException as exc:
+                outcome["error"] = exc
+            finally:
+                event_queue.put(("done", None))
+
+        def poll_events():
+            done = False
+            while True:
+                try:
+                    event_type, payload = event_queue.get_nowait()
+                except queue.Empty:
+                    break
+                if event_type == "progress":
+                    progress_window.handle_event(payload)
+                elif event_type == "done":
+                    done = True
+            if done:
+                progress_window.close()
+                finished.set(True)
+            else:
+                self.root.after(50, poll_events)
+
+        solver_thread = threading.Thread(
+            target=solve,
+            name=f"mv-if-solver-{self.antenna.id}",
+            daemon=True,
+        )
+        solver_thread.start()
+        self.root.after(0, poll_events)
+        self.root.wait_variable(finished)
+        solver_thread.join()
+        if "error" in outcome:
+            messagebox.showerror(
+                "MultiView calculation failed",
+                str(outcome["error"]),
+                parent=self.root,
+            )
+            raise outcome["error"]
 
     def load(self, do_rerun=True):
         """Load saved manual edits/config and optionally recompute the solution."""

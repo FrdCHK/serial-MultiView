@@ -20,7 +20,14 @@ from .elevation_mapping import (
     gradient_axis_label,
     normalize_elevation_mapping,
 )
-from .viterbi_kalman_altaz import altaz_offsets, fit_viterbi_kalman_gradient
+from .delay_parallel import (
+    DelayIfSolveError,
+    DelayIfSolveInput,
+    emit_progress,
+    run_delay_if_tasks,
+    validate_parallel_workers,
+)
+from .viterbi_kalman_altaz import altaz_offsets
 # from .rodrigues_rotation import rodrigues_rotation
 
 
@@ -166,7 +173,12 @@ class Antenna:
     @staticmethod
     def _parse_integer_states(value):
         if isinstance(value, str):
-            value = ast.literal_eval(value)
+            if value.strip().lower() in ("", "none", "null"):
+                value = 3
+            else:
+                value = ast.literal_eval(value)
+        if value is None:
+            value = 3
         if np.isscalar(value):
             radius = int(value)
             if radius < 0:
@@ -299,6 +311,7 @@ class Antenna:
         viterbi_p0_gradient=None,
         elevation_mapping="linear",
         separation_noise=0.0,
+        parallel_workers=0,
         progress_callback=None,
     ):
         """
@@ -319,165 +332,273 @@ class Antenna:
 
         The returned gradients are evaluated at the target AltAz offset for the
         same times, then the IF-specific target delays are interpolated to the
-        first valid IF and averaged.  Output compatibility is preserved by
-        saving only ``t`` and averaged ``mbdelay`` downstream.
+        first valid IF and averaged.  IF workers return immutable results; this
+        object is updated only after every worker and final aggregation succeed.
         """
-        def report(message, current=None, total=None):
-            if progress_callback is not None:
-                progress_callback(message, current, total)
+        for if_id in self.delay_if_ids:
+            emit_progress(progress_callback, "if_state", if_id=if_id, state="queued")
+        emit_progress(
+            progress_callback,
+            "global_state",
+            state="preparing",
+            message="Preparing IF observations",
+        )
+        try:
+            parallel_workers = validate_parallel_workers(parallel_workers)
+            kalman_factor = float(kalman_factor)
+            unit_weight_variance = float(unit_weight_variance)
+            if unit_weight_variance <= 0.0:
+                raise ValueError("unit_weight_variance must be positive.")
+            rts_smoothing = self._parse_bool(rts_smoothing)
+            viterbi_integer_states = self._parse_integer_states(viterbi_integer_states)
+            viterbi_max_jump = int(viterbi_max_jump)
+            viterbi_jump_penalty = float(viterbi_jump_penalty)
+            viterbi_robust = self._parse_bool(viterbi_robust)
+            viterbi_huber_c = float(viterbi_huber_c)
+            viterbi_z_out = float(viterbi_z_out)
+            viterbi_max_outlier_iterations = int(viterbi_max_outlier_iterations)
+            viterbi_fix_initial_integer = self._parse_initial_integer(viterbi_fix_initial_integer)
+            viterbi_p0_gradient = self._parse_optional(viterbi_p0_gradient, float)
+            mapping = normalize_elevation_mapping(elevation_mapping)
+            separation_noise = float(separation_noise)
+            if separation_noise < 0.0:
+                raise ValueError("separation_noise must be >= 0.")
 
-        if self.original_data.empty:
-            report("No delay data available", 1, 1)
-            self.delay_mv_result = {}
-            self.delay_mv_t = np.array([])
-            self.delay_mv_t_by_if = {}
-            self.delay_target_if = {}
-            self.delay_average = np.array([])
-            self.delay_average_t = np.array([])
-            return
-        n_if = len(self.delay_if_ids)
-        progress_total = max(1, n_if * 3 + 2)
-        progress_current = 0
-        report("Preparing delay data", progress_current, progress_total)
-        self.delay_auto_reset()
-        self.update_delay_data()
-        if self.data.empty or not self.delay_if_ids:
-            report("No unflagged delay data available", progress_total, progress_total)
-            self.delay_mv_result = {}
-            self.delay_mv_t = np.array([])
-            self.delay_mv_t_by_if = {}
-            self.delay_target_if = {}
-            self.delay_average = np.array([])
-            self.delay_average_t = np.array([])
-            return
+            tasks = []
+            skipped_if_ids = []
+            if not self.original_data.empty and self.delay_if_ids:
+                base_data = self._prepare_delay_base_data(mapping)
+                for if_num, if_id in enumerate(self.delay_if_ids):
+                    emit_progress(progress_callback, "if_state", if_id=if_id, state="preparing")
+                    try:
+                        task = self._prepare_delay_if_task(
+                            base_data,
+                            if_id,
+                            kalman_factor=kalman_factor,
+                            unit_weight_variance=unit_weight_variance,
+                            rts_smoothing=rts_smoothing,
+                            viterbi_integer_states=viterbi_integer_states,
+                            viterbi_max_jump=viterbi_max_jump,
+                            viterbi_jump_penalty=viterbi_jump_penalty,
+                            viterbi_robust=viterbi_robust,
+                            viterbi_huber_c=viterbi_huber_c,
+                            viterbi_z_out=viterbi_z_out,
+                            viterbi_max_outlier_iterations=viterbi_max_outlier_iterations,
+                            viterbi_fix_initial_integer=viterbi_fix_initial_integer,
+                            viterbi_p0_gradient=viterbi_p0_gradient,
+                            separation_noise=separation_noise,
+                        )
+                    except BaseException as exc:
+                        emit_progress(
+                            progress_callback,
+                            "if_state",
+                            if_id=if_id,
+                            state="failed",
+                            message=str(exc),
+                        )
+                        for task_pending in tasks:
+                            emit_progress(
+                                progress_callback,
+                                "if_state",
+                                if_id=task_pending.if_id,
+                                state="cancelled",
+                            )
+                        for remaining_if in self.delay_if_ids[if_num + 1:]:
+                            emit_progress(
+                                progress_callback,
+                                "if_state",
+                                if_id=remaining_if,
+                                state="cancelled",
+                            )
+                        raise DelayIfSolveError(if_id, exc) from exc
+                    if task is None:
+                        skipped_if_ids.append(if_id)
+                        emit_progress(progress_callback, "if_state", if_id=if_id, state="skipped")
+                    else:
+                        tasks.append(task)
+                        emit_progress(progress_callback, "if_state", if_id=if_id, state="queued")
+            else:
+                skipped_if_ids = list(self.delay_if_ids)
+                for if_id in skipped_if_ids:
+                    emit_progress(progress_callback, "if_state", if_id=if_id, state="skipped")
 
-        kalman_factor = float(kalman_factor)
-        unit_weight_variance = float(unit_weight_variance)
-        if unit_weight_variance <= 0.0:
-            raise ValueError("unit_weight_variance must be positive.")
-        rts_smoothing = self._parse_bool(rts_smoothing)
-        viterbi_integer_states = self._parse_integer_states(viterbi_integer_states)
-        viterbi_max_jump = int(viterbi_max_jump)
-        viterbi_jump_penalty = float(viterbi_jump_penalty)
-        viterbi_robust = self._parse_bool(viterbi_robust)
-        viterbi_huber_c = float(viterbi_huber_c)
-        viterbi_z_out = float(viterbi_z_out)
-        viterbi_max_outlier_iterations = int(viterbi_max_outlier_iterations)
-        viterbi_fix_initial_integer = self._parse_initial_integer(viterbi_fix_initial_integer)
-        viterbi_p0_gradient = self._parse_optional(viterbi_p0_gradient, float)
-        self.elevation_mapping = normalize_elevation_mapping(elevation_mapping)
-        separation_noise = float(separation_noise)
-        if separation_noise < 0.0:
-            raise ValueError("separation_noise must be >= 0.")
+            emit_progress(
+                progress_callback,
+                "global_state",
+                state="solving",
+                message="Solving IFs in parallel",
+            )
+            result_by_if = run_delay_if_tasks(tasks, parallel_workers, progress_callback)
+            emit_progress(
+                progress_callback,
+                "global_state",
+                state="combining",
+                message="Combining IF solutions",
+            )
+            self._commit_delay_solution(mapping, result_by_if, skipped_if_ids)
+        except BaseException as exc:
+            emit_progress(
+                progress_callback,
+                "global_state",
+                state="failed",
+                message=str(exc),
+            )
+            raise
+        emit_progress(
+            progress_callback,
+            "global_state",
+            state="complete",
+            message="Calculation complete",
+        )
 
+    def _prepare_delay_base_data(self, elevation_mapping):
+        """Return source/time coordinates shared by every IF preparation."""
+
+        base_data = self.original_data.copy(deep=True)
+        base_data["_orig_index"] = base_data.index
+        if "weight" not in base_data.columns:
+            base_data["weight"] = 1.0
+        coordinate_data = self.add_altaz_offsets(
+            base_data[["calsour", "t", "_orig_index"]],
+            elevation_mapping,
+        )
+        base_data[["delta_el", "delta_az", "theta_deg"]] = coordinate_data[
+            ["delta_el", "delta_az", "theta_deg"]
+        ].to_numpy()
+        return base_data
+
+    def _prepare_delay_if_task(
+        self,
+        base_data,
+        if_id,
+        kalman_factor,
+        unit_weight_variance,
+        rts_smoothing,
+        viterbi_integer_states,
+        viterbi_max_jump,
+        viterbi_jump_penalty,
+        viterbi_robust,
+        viterbi_huber_c,
+        viterbi_z_out,
+        viterbi_max_outlier_iterations,
+        viterbi_fix_initial_integer,
+        viterbi_p0_gradient,
+        separation_noise,
+    ):
+        """Build one IF's immutable worker payload from manual edits only."""
+
+        flag_col = self._flag_col(if_id)
+        wrap_col = self._wrap_col(if_id)
+        delay_col = f"d{if_id}"
+        phase_col = f"p{if_id}"
+        missing = [column for column in (flag_col, wrap_col) if column not in self.delay_adjust_info.columns]
+        missing.extend(column for column in (delay_col, phase_col) if column not in base_data.columns)
+        if missing:
+            raise KeyError(f"Missing IF{if_id + 1} columns: {', '.join(missing)}")
+
+        unflagged = self.delay_adjust_info[flag_col].astype(int) == 0
+        data_if = base_data.loc[unflagged].copy(deep=True)
+        if data_if.empty:
+            return None
+        wrap_step = 1.0 / (self.if_freq.get(if_id, 1.0) * 1e9)
+        data_if[delay_col] += (
+            self.delay_adjust_info.loc[unflagged, wrap_col].to_numpy(dtype=int) * wrap_step
+        )
+        data_if = self._correct_delay_with_phase(data_if, if_id)
+        finite = (
+            np.isfinite(data_if["total_delay"].to_numpy(dtype=float))
+            & np.isfinite(data_if["weight"].to_numpy(dtype=float))
+            & (data_if["weight"].to_numpy(dtype=float) > 0.0)
+            & np.isfinite(data_if["delta_el"].to_numpy(dtype=float))
+            & np.isfinite(data_if["delta_az"].to_numpy(dtype=float))
+            & np.isfinite(data_if["theta_deg"].to_numpy(dtype=float))
+        )
+        data_if = data_if.loc[finite].copy(deep=True)
+        if data_if.empty:
+            return None
+        data_solve = data_if.iloc[::-1].copy(deep=True) if self.reverse else data_if
+        variance = self.effective_delay_variance(
+            unit_weight_variance,
+            data_solve["weight"].to_numpy(dtype=float),
+            data_solve["theta_deg"].to_numpy(dtype=float),
+            separation_noise,
+        )
+        return DelayIfSolveInput(
+            if_id=if_id,
+            t=data_solve["t"].to_numpy(dtype=float),
+            source_id=data_solve["calsour"].to_numpy(dtype=int),
+            delta_el=data_solve["delta_el"].to_numpy(dtype=float),
+            delta_az=data_solve["delta_az"].to_numpy(dtype=float),
+            delay=data_solve["total_delay"].to_numpy(dtype=float),
+            variance=variance,
+            orig_index=data_solve["_orig_index"].to_numpy(dtype=int),
+            kalman_factor=kalman_factor,
+            ambiguity_spacing=wrap_step,
+            integer_states=tuple(viterbi_integer_states),
+            max_jump=viterbi_max_jump,
+            jump_penalty=viterbi_jump_penalty,
+            robust=viterbi_robust,
+            huber_c=viterbi_huber_c,
+            z_out=viterbi_z_out,
+            max_outlier_iterations=viterbi_max_outlier_iterations,
+            fix_initial_integer=viterbi_fix_initial_integer,
+            p0_gradient=viterbi_p0_gradient,
+            rts_smoothing=rts_smoothing,
+            reverse=self.reverse,
+        )
+
+    def _commit_delay_solution(self, elevation_mapping, result_by_if, skipped_if_ids):
+        """Atomically publish staged IF results and their combined correction."""
+
+        skipped = set(skipped_if_ids)
         delay_results = {}
         delay_t_by_if = {}
         fit_info = {}
-        for if_num, if_id in enumerate(self.delay_if_ids, start=1):
-            report(f"IF {if_num}/{n_if}: preparing observations", progress_current, progress_total)
-            self.update_delay_data(if_id)
-            if self.data.empty:
+        auto_adjust = self.delay_auto_adjust_info.copy(deep=True)
+        auto_adjust.iloc[:, :] = 0
+        for if_id in self.delay_if_ids:
+            result = result_by_if.get(if_id)
+            if result is None:
+                if if_id not in skipped:
+                    raise RuntimeError(f"No staged result for IF{if_id + 1}.")
                 delay_results[if_id] = np.empty((0, 4))
                 delay_t_by_if[if_id] = np.array([])
-                progress_current += 3
-                report(f"IF {if_num}/{n_if}: skipped", progress_current, progress_total)
                 continue
-            if "weight" not in self.data.columns:
-                self.data["weight"] = 1.0
-            # Fold the exported phase back into the delay observable so the
-            # solver receives a phase-consistent total delay in seconds.
-            data_corrected = self._correct_delay_with_phase(self.data.copy(deep=True), if_id)
-            data_view = data_corrected[["calsour", "t", "total_delay", "weight", "_orig_index"]].copy(deep=True)
-            data_view = self.add_altaz_offsets(data_view, self.elevation_mapping)
-            finite = (
-                np.isfinite(data_view["total_delay"].to_numpy(dtype=float))
-                & np.isfinite(data_view["weight"].to_numpy(dtype=float))
-                & (data_view["weight"].to_numpy(dtype=float) > 0.0)
-                & np.isfinite(data_view["delta_el"].to_numpy(dtype=float))
-                & np.isfinite(data_view["delta_az"].to_numpy(dtype=float))
-                & np.isfinite(data_view["theta_deg"].to_numpy(dtype=float))
-            )
-            data_view = data_view.loc[finite].copy(deep=True)
-            data_view.reset_index(drop=True, inplace=True)
-            if data_view.empty:
-                delay_results[if_id] = np.empty((0, 4))
-                delay_t_by_if[if_id] = np.array([])
-                progress_current += 3
-                report(f"IF {if_num}/{n_if}: skipped", progress_current, progress_total)
-                continue
-            progress_current += 1
-            report(f"IF {if_num}/{n_if}: fitting Viterbi-Kalman", progress_current, progress_total)
-
-            data_solve = data_view.iloc[::-1].copy(deep=True) if self.reverse else data_view
-            ambiguity_spacing = 1.0 / (self.if_freq.get(if_id, 1.0) * 1e9)
-            variance = self.effective_delay_variance(
-                unit_weight_variance,
-                data_solve["weight"].to_numpy(dtype=float),
-                data_solve["theta_deg"].to_numpy(dtype=float),
-                separation_noise,
-            )
-            fit = fit_viterbi_kalman_gradient(
-                data_solve["t"].to_numpy(dtype=float),
-                data_solve["calsour"].to_numpy(dtype=int),
-                data_solve["delta_el"].to_numpy(dtype=float),
-                data_solve["delta_az"].to_numpy(dtype=float),
-                data_solve["total_delay"].to_numpy(dtype=float),
-                variance,
-                kalman_factor,
-                ambiguity_spacing,
-                integer_states=viterbi_integer_states,
-                max_jump=viterbi_max_jump,
-                jump_penalty=viterbi_jump_penalty,
-                robust=viterbi_robust,
-                huber_c=viterbi_huber_c,
-                z_out=viterbi_z_out,
-                max_outlier_iterations=viterbi_max_outlier_iterations,
-                fix_initial_integer=viterbi_fix_initial_integer,
-                p0_gradient=viterbi_p0_gradient,
-                rts_smoothing=rts_smoothing,
-            )
-            progress_current += 1
-            report(f"IF {if_num}/{n_if}: storing result", progress_current, progress_total)
-            if self.reverse:
-                mv_res = fit.state[::-1]
-                mv_t = data_solve["t"].to_numpy(dtype=float)[::-1]
-                integer_path = fit.integer_path[::-1]
-                orig_index = data_solve["_orig_index"].to_numpy(dtype=int)[::-1]
-                outlier_mask = fit.outlier_mask[::-1]
-            else:
-                mv_res = fit.state
-                mv_t = data_solve["t"].to_numpy(dtype=float)
-                integer_path = fit.integer_path
-                orig_index = data_solve["_orig_index"].to_numpy(dtype=int)
-                outlier_mask = fit.outlier_mask
-            delay_results[if_id] = mv_res
-            delay_t_by_if[if_id] = mv_t
+            delay_results[if_id] = result.state
+            delay_t_by_if[if_id] = result.t
             fit_info[if_id] = {
-                "integer_path": integer_path,
-                "orig_index": orig_index,
-                "outlier_mask": outlier_mask,
-                "standardized_residual": fit.standardized_residual[::-1] if self.reverse else fit.standardized_residual,
+                "integer_path": result.integer_path,
+                "orig_index": result.orig_index,
+                "outlier_mask": result.outlier_mask,
+                "standardized_residual": result.standardized_residual,
             }
-            # Store the Viterbi ambiguity path as automatic wrap adjustments so
-            # plots and later manual edits use the same corrected data model.
-            self.delay_auto_adjust_info.loc[orig_index, self._wrap_col(if_id)] = integer_path.astype(int)
-            outlier_orig_index = orig_index[np.asarray(outlier_mask, dtype=bool)]
+            auto_adjust.loc[result.orig_index, self._wrap_col(if_id)] = result.integer_path.astype(int)
+            outlier_orig_index = result.orig_index[np.asarray(result.outlier_mask, dtype=bool)]
             if outlier_orig_index.size > 0:
-                # Outliers identified during the solver refit are treated like
-                # automatic flags for this IF.  Manual flags remain separate.
-                self.delay_auto_adjust_info.loc[outlier_orig_index, self._flag_col(if_id)] = 1
-            progress_current += 1
-            report(f"IF {if_num}/{n_if}: done", progress_current, progress_total)
+                auto_adjust.loc[outlier_orig_index, self._flag_col(if_id)] = 1
 
-        report("Computing target correction", progress_total - 1, progress_total)
+        first_if = next(
+            (if_id for if_id in self.delay_if_ids if delay_t_by_if[if_id].size > 0),
+            None,
+        )
+        delay_mv_t = delay_t_by_if[first_if] if first_if is not None else np.array([])
+        delay_target_if, delay_average, delay_average_t = self._calculate_delay_target_series(
+            delay_results,
+            delay_t_by_if,
+            delay_mv_t,
+            elevation_mapping,
+        )
+
+        self.elevation_mapping = elevation_mapping
+        self.delay_auto_adjust_info = auto_adjust
         self.delay_mv_result = delay_results
         self.delay_mv_t_by_if = delay_t_by_if
         self.delay_fit_info = fit_info
-        first_if = next((if_id for if_id in self.delay_if_ids if delay_t_by_if.get(if_id, np.array([])).size > 0), None)
-        self.delay_mv_t = delay_t_by_if[first_if] if first_if is not None else np.array([])
-        self.delay_target_if = {}
-        self._refresh_delay_target_series()
-        report("Calculation complete", progress_total, progress_total)
+        self.delay_mv_t = delay_mv_t
+        self.delay_target_if = delay_target_if
+        self.delay_average = delay_average
+        self.delay_average_t = delay_average_t
+        self.update_delay_data(self.delay_if_ids[0] if self.delay_if_ids else 0)
 
     def delay_flag(self, timerange, calibrators, mode='flag'):
         return self.delay_flag_if(timerange, calibrators, 0, mode)
@@ -728,33 +849,52 @@ class Antenna:
             self.delay_average = np.array([])
             self.delay_average_t = np.array([])
             return
+        refreshed, delay_average, delay_average_t = self._calculate_delay_target_series(
+            self.delay_mv_result,
+            self.delay_mv_t_by_if,
+            self.delay_mv_t,
+            self.elevation_mapping,
+        )
+        self.delay_target_if = refreshed
+        self.delay_average = delay_average
+        self.delay_average_t = delay_average_t
+
+    def _calculate_delay_target_series(
+        self,
+        delay_results,
+        delay_t_by_if,
+        delay_mv_t,
+        elevation_mapping,
+    ):
+        """Calculate per-IF target delays and their deterministic average."""
+
         refreshed = {}
-        for if_id, mv_res in self.delay_mv_result.items():
-            times_raw = self.delay_mv_t_by_if.get(if_id, self.delay_mv_t)
+        for if_id, mv_res in delay_results.items():
+            times_raw = delay_t_by_if.get(if_id, delay_mv_t)
             if mv_res.size == 0 or times_raw is None or len(times_raw) == 0 or self.target is None:
                 refreshed[if_id] = np.array([])
                 continue
             times = np.asarray(times_raw, dtype=float)
             n_target = min(len(times), len(mv_res))
-            target_offsets = self.source_altaz_offsets(self.target, times[:n_target], self.elevation_mapping)
+            target_offsets = self.source_altaz_offsets(
+                self.target,
+                times[:n_target],
+                elevation_mapping,
+            )
             refreshed[if_id] = np.sum(mv_res[:n_target, :2] * target_offsets, axis=1)
-        self.delay_target_if = refreshed
-        valid_items = [(if_id, arr) for if_id, arr in self.delay_target_if.items() if arr.size > 0]
+        valid_items = [(if_id, arr) for if_id, arr in refreshed.items() if arr.size > 0]
         if valid_items:
             base_if, base_arr = valid_items[0]
-            base_t = np.asarray(self.delay_mv_t_by_if.get(base_if, self.delay_mv_t), dtype=float)
+            base_t = np.asarray(delay_t_by_if.get(base_if, delay_mv_t), dtype=float)
             aligned = [base_arr]
             for if_id, arr in valid_items[1:]:
-                this_t = np.asarray(self.delay_mv_t_by_if.get(if_id, self.delay_mv_t), dtype=float)
+                this_t = np.asarray(delay_t_by_if.get(if_id, delay_mv_t), dtype=float)
                 if arr.size == base_arr.size and np.allclose(this_t, base_t):
                     aligned.append(arr)
                 else:
                     aligned.append(np.interp(base_t, this_t, arr))
-            self.delay_average = np.mean(np.vstack(aligned), axis=0)
-            self.delay_average_t = base_t
-        else:
-            self.delay_average = np.array([])
-            self.delay_average_t = np.array([])
+            return refreshed, np.mean(np.vstack(aligned), axis=0), base_t
+        return refreshed, np.array([]), np.array([])
     
     def _correct_delay_with_phase(self, data_in, if_id):
         """Build a phase-consistent total-delay observable for one IF.

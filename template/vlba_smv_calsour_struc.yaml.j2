@@ -189,15 +189,16 @@ plugins:
       indisk: {{ indisk }}
   - name: MVRun
     params:
-      kalman_factor: {{ kalman_factor }}
-      rts_smoothing: {{ rts_smoothing }}
-      elevation_mapping: {{ elevation_mapping }}
-      separation_noise: {{ separation_noise }}
-      integer_states: {{ integer_states }}
-      max_jump: {{ max_jump }}
-      jump_penalty: {{ jump_penalty }}
-      huber_c: {{ huber_c }}
-      z_out: {{ z_out }}
+      kalman_factor: {{ kalman_factor | default(1.0e-14) }}
+      rts_smoothing: {{ rts_smoothing | default(true) }}
+      elevation_mapping: {{ elevation_mapping | default('linear') }}
+      separation_noise: {{ separation_noise | default(0.0) }}
+      parallel_workers: {{ parallel_workers | default(0) }}
+      integer_states: {{ integer_states | default(3) }}
+      max_jump: {{ max_jump | default(1) }}
+      jump_penalty: {{ jump_penalty | default(25.0) }}
+      huber_c: {{ huber_c | default(3.0) }}
+      z_out: {{ z_out | default(4.0) }}
   - name: MVPostProcess
     params:
       indisk: {{ indisk }}

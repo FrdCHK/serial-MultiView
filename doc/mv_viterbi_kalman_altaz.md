@@ -1,9 +1,9 @@
 # Mapped-Elevation AltAz Viterbi-Kalman MultiView
 
-This document describes the current serial MultiView delay implementation in
-`plugin/core/mv`.  It replaces the older recursive normal-vector solver with a
-per-IF Viterbi-Kalman solver in station-local mapped-elevation/AltAz
-coordinates.
+This document describes the current serial MultiView workflow in
+`plugin/core/mv`.  It replaces the older recursive normal-vector solver with
+independent per-IF Viterbi-Kalman solvers in station-local
+mapped-elevation/AltAz coordinates.
 
 ## Scope
 
@@ -190,6 +190,26 @@ Rauch-Tung-Striebel backward pass.  This uses future scans to smooth the
 gradient and gradient-rate time series.  Disabling it leaves the forward-filtered
 state sequence.
 
+## Parallel IF Execution
+
+IFs do not share an ambiguity path or Kalman state, so valid IF inputs are sent
+to separate spawn-based worker processes.  The observation sequence inside one
+IF remains serial because Viterbi transitions, forward filtering, and RTS
+smoothing depend on adjacent times.  Station/source AltAz coordinates are
+prepared once and reused while building the IF-specific observables.
+
+The worker limit is controlled by `parallel_workers`.  `0` selects
+`min(valid_IF_count, CPU_count)`; a positive value is an explicit cap.  A
+single effective worker runs inline without process-start overhead.  Empty IFs
+are skipped normally.
+
+Each worker returns arrays without modifying `Antenna`.  Automatic wraps,
+outlier flags, per-IF fits, target corrections, and the averaged delay are
+committed only after every worker and final aggregation succeed.  A failed IF
+therefore leaves the previously committed solution intact, and dictionary/CSV
+ordering continues to follow the configured IF order rather than completion
+order.
+
 ## Public Parameters
 
 These keys appear in `config/config.yaml`, the sMV templates, and the GUI config
@@ -202,6 +222,8 @@ window:
   `linear`.
 - `separation_noise`: unitless angular-separation noise coefficient; default
   `0.0` preserves the old SN-weight-only variance.
+- `parallel_workers`: simultaneous IF solver processes; `0` uses the automatic
+  CPU-aware limit and positive integers set an explicit cap.
 - `integer_states`: integer search radius `n`, expanded to `[-n, ..., n]`.
 - `max_jump`: maximum ambiguity-integer change allowed for one calibrator step.
 - `jump_penalty`: fixed Viterbi cost added when an ambiguity integer changes.
@@ -215,7 +237,8 @@ These controls are fixed in `plugin/core/mv/solver_config.py`:
 - maximum outlier-refit iterations
 - automatic initial covariance scale
 
-Older saved configs containing `viterbi_*` keys are migrated when loaded.
+Older input and saved configs containing `viterbi_*` keys are migrated to the
+current public names before control rendering and when loaded.
 
 ## Implementation Map
 
@@ -226,8 +249,10 @@ Older saved configs containing `viterbi_*` keys are migrated when loaded.
 - `plugin/core/mv/solver_config.py`: public defaults, legacy key migration, and
   GUI-to-solver keyword translation.
 - `plugin/core/mv/Antenna.py`: per-IF data preparation, phase-consistent delay
-  construction, solver calls, automatic flags/wraps, target correction
-  evaluation, and CSV export.
+  construction, atomic result assembly, target correction evaluation, and CSV
+  export.
+- `plugin/core/mv/delay_parallel.py`: picklable IF payload/result types, worker
+  count policy, spawn-based scheduling, and the pure per-IF solver call.
 - `plugin/core/mv/MVRun.py`: collects SN exports, station X/Y/Z, observation JD,
   primary/target metadata, and creates one `Antenna` GUI session per antenna.
 - `plugin/core/mv/Gui.py`: creates the root, config, and adjust windows; first
@@ -249,9 +274,12 @@ does not automatically rerun the solver.  Manual flagging, wrapping, reset,
 launching a solve.  Press `rerun` in the root window when you want the current
 edits and parameters to be used.
 
-During first run and rerun, a small progress dialog reports preparation,
-per-IF fitting, result storage, target correction, and completion.  It closes
-automatically after the solve finishes.
+During first run and rerun, the modal progress dialog shows one status row per
+IF plus an aggregate completed-IF bar.  IFs can move through queued, preparing,
+running, complete, skipped, failed, or cancelled states in any order.  Tk polls
+structured solver events on its own thread, so the window stays responsive
+while worker processes solve IFs.  After all valid IFs complete, the dialog
+reports target-correction combination and closes automatically.
 
 The 3D slice window visualizes the fitted plane at the selected time range as
 `delay = grad_el * x_el + grad_az * delta_az`.  X and Y keep their independent

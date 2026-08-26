@@ -25,7 +25,7 @@ class MVRun(Plugin):
                "Plugins required: MVSnExport, MVPrimaryCalibratorSelect. " \
                "Delay MV solves mapped-elevation/AltAz gradients. " \
                "Parameters optional: kalman_factor, rts_smoothing, elevation_mapping, " \
-               "separation_noise, integer_states, max_jump, jump_penalty, huber_c, and z_out."
+               "separation_noise, parallel_workers, integer_states, max_jump, jump_penalty, huber_c, and z_out."
 
     def run(self, context: Context) -> bool:
         context.logger.info("Start MultiView GUI run")
@@ -41,7 +41,7 @@ class MVRun(Plugin):
         base_config["if_freq"] = list(if_freq)
         apply_solver_defaults(base_config)
         for key in SOLVER_KEYS:
-            if key in self.params:
+            if key in self.params and self.params[key] is not None:
                 base_config[key] = self.params[key]
         apply_solver_defaults(base_config)
 
