@@ -3,6 +3,7 @@ flag window of GUI
 @Author: Jingdong Zhang
 @DATE  : 2024/8/6
 """
+import ast
 import tkinter as tk
 from tkinter import font
 import matplotlib.pyplot as plt
@@ -16,6 +17,13 @@ from .Slice3DWindow import Slice3DWindow
 
 
 class AdjustWindow:
+    """Manual delay inspection/flagging window for one target and antenna.
+
+    Manual edits update the plotted data immediately, but most controls do not
+    automatically rerun the Viterbi-Kalman solver.  The user can make several
+    edits, then press the root-window rerun button once.
+    """
+
     def __init__(self, root, antenna: Antenna, config, target, primary, target_relative_position, secondary_calibrators):
         self.root = root
         self.antenna = antenna
@@ -27,8 +35,8 @@ class AdjustWindow:
 
         self.window = tk.Toplevel(root.root)
         self.window.title("ADJUST")
-        self.window.geometry("1320x890+600+60")
-        self.window.minsize(width=1320, height=890)
+        self.window.geometry("1320x915+600+60")
+        self.window.minsize(width=1320, height=915)
 
         self.window.grid_columnconfigure(0, weight=1)
         self.window.grid_rowconfigure(0, weight=2)
@@ -57,6 +65,9 @@ class AdjustWindow:
         self.fill = None
         self.y_limits = None
         self.slice_window = None
+        self.fix_initial_window = None
+        self.config.setdefault("fix_initial_enabled", self.config.pop("viterbi_fix_initial_enabled", False))
+        self.config.setdefault("fix_initial_values", self.config.pop("viterbi_fix_initial_values", {}))
 
         self.frames[1].grid_rowconfigure(0, weight=1)
         self.frames[1].grid_columnconfigure(0, weight=18, minsize=300)
@@ -123,6 +134,19 @@ class AdjustWindow:
         )
         original_delay_menu.config(font=self.font)
         original_delay_menu.pack(padx=5, pady=5)
+
+        fix_initial_frame = tk.Frame(left_controls_frame)
+        fix_initial_frame.pack(padx=5, pady=5, fill="x")
+        fix_initial_frame.grid_columnconfigure(0, weight=1)
+        fix_initial_frame.grid_columnconfigure(1, weight=1)
+        self.fix_initial_var = tk.BooleanVar(value=bool(self.config.get("fix_initial_enabled", False)))
+        fix_initial_toggle = tk.Checkbutton(fix_initial_frame, text="fix N0", font=self.font,
+                                            variable=self.fix_initial_var, command=self.on_fix_initial_toggle)
+        fix_initial_toggle.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        self.fix_initial_button = tk.Button(fix_initial_frame, height=1, text="set N0",
+                                            font=self.font, command=self.open_fix_initial_window)
+        self.fix_initial_button.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        self.on_fix_initial_toggle()
 
         label_info = tk.Label(right_calibrator_frame, text="secondary\n-- calibrator --\nadjust",
                               font=self.font, anchor="center", justify="center")
@@ -288,8 +312,11 @@ class AdjustWindow:
             self.delay_plot()
 
     def on_reset(self):
+        """Clear manual/automatic delay edits and redraw without auto-rerun."""
         self.antenna.delay_reset()
-        self.root.rerun()
+        self.delay_plot()
+        if self.slice_window is not None:
+            self.slice_window.refresh()
 
     def open_slice_window(self):
         if self.slice_window is not None:
@@ -314,8 +341,96 @@ class AdjustWindow:
         self.slice_window = None
 
     def on_apply_all(self):
+        """Copy manual flags/wraps from the selected IF to all IFs."""
         self.antenna.delay_apply_manual_to_all(self.get_selected_if_id())
-        self.root.rerun()
+        self.delay_plot()
+
+    def on_fix_initial_toggle(self):
+        """Enable/disable per-calibrator fixed initial ambiguity integers."""
+        enabled = bool(self.fix_initial_var.get())
+        self.config["fix_initial_enabled"] = enabled
+        self.config.setdefault("fix_initial_values", self._fix_initial_values())
+        if hasattr(self, "fix_initial_button"):
+            self.fix_initial_button.config(state=tk.NORMAL if enabled else tk.DISABLED)
+
+    def _fix_initial_values(self):
+        """Return a complete calibrator-id -> initial integer mapping."""
+        raw_values = self.config.get("fix_initial_values", {}) or {}
+        values = {}
+        for item in self.secondary_calibrators:
+            cal_id = int(item.id)
+            values[cal_id] = int(raw_values.get(cal_id, raw_values.get(str(cal_id), 0)))
+        return values
+
+    def _allowed_initial_integers(self):
+        """Return the integer set implied by the public ``integer_states`` radius."""
+        states = self.config.get("integer_states", self.config.get("viterbi_integer_states", 3))
+        if isinstance(states, str):
+            states = ast.literal_eval(states)
+        if np.isscalar(states):
+            radius = int(states)
+            return set(range(-radius, radius + 1))
+        return {int(item) for item in states}
+
+    def open_fix_initial_window(self):
+        """Open the small per-calibrator initial-ambiguity editor."""
+        if self.fix_initial_window is not None:
+            try:
+                self.fix_initial_window.lift()
+                self.fix_initial_window.focus_force()
+                return
+            except Exception:
+                self.fix_initial_window = None
+
+        values = self._fix_initial_values()
+        window = tk.Toplevel(self.window)
+        self.fix_initial_window = window
+        window.title("Initial ambiguity")
+        window.geometry("420x420+740+180")
+        window.minsize(width=360, height=260)
+        window.protocol("WM_DELETE_WINDOW", self._close_fix_initial_window)
+        window.grid_columnconfigure(0, weight=1)
+        window.grid_columnconfigure(1, weight=1)
+
+        entries = {}
+        for row, item in enumerate(self.secondary_calibrators):
+            cal_id = int(item.id)
+            label = tk.Label(window, text=f"{item.name} ({cal_id})", font=self.font, anchor="e")
+            label.grid(row=row, column=0, padx=5, pady=5, sticky="ew")
+            entry = tk.Entry(window, font=self.font, width=8)
+            entry.insert(0, str(values.get(cal_id, 0)))
+            entry.grid(row=row, column=1, padx=5, pady=5, sticky="w")
+            entries[cal_id] = entry
+
+        error_label = tk.Label(window, text="", fg="red", font=self.font, anchor="center")
+        error_label.grid(row=len(self.secondary_calibrators), column=0, columnspan=2, padx=5, pady=5, sticky="ew")
+
+        def save_values():
+            try:
+                allowed = self._allowed_initial_integers()
+                parsed = {}
+                for cal_id, entry in entries.items():
+                    value = int(entry.get())
+                    if value not in allowed:
+                        raise ValueError("outside state radius")
+                    parsed[cal_id] = value
+            except (ValueError, SyntaxError):
+                error_label.config(text="invalid integer")
+                return
+            self.config["fix_initial_values"] = parsed
+            self.config["fix_initial_enabled"] = bool(self.fix_initial_var.get())
+            self._close_fix_initial_window()
+
+        save_button = tk.Button(window, text="save", height=1, width=10, font=self.font, command=save_values)
+        save_button.grid(row=len(self.secondary_calibrators) + 1, column=1, padx=5, pady=5)
+        close_button = tk.Button(window, text="close", height=1, width=10, font=self.font,
+                                 command=self._close_fix_initial_window)
+        close_button.grid(row=len(self.secondary_calibrators) + 1, column=0, padx=5, pady=5)
+
+    def _close_fix_initial_window(self):
+        if self.fix_initial_window is not None:
+            self.fix_initial_window.destroy()
+            self.fix_initial_window = None
 
     def on_ylim_apply(self):
         if self.present_phase_ax is None:
@@ -451,4 +566,6 @@ class AdjustWindow:
     def save(self, adj_dir, mv_dir):
         self.config['reverse'] = self.antenna.reverse
         self.config['t_flag'] = self.antenna.delay_t_flag_info
+        self.config["fix_initial_enabled"] = bool(self.fix_initial_var.get())
+        self.config["fix_initial_values"] = self._fix_initial_values()
         self.antenna.save_delay(adj_dir, mv_dir)

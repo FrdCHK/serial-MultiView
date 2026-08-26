@@ -88,14 +88,15 @@ class MVSnExport(Plugin):
                 phase_column = [f"p{if_id}" for if_id in range(context.get_context()["no_if"])]
                 delay_column = [f"d{if_id}" for if_id in range(context.get_context()["no_if"])]
                 rate_column = [f"r{if_id}" for if_id in range(context.get_context()["no_if"])]
-                sn_df = pd.DataFrame(columns=["t", "antenna", "calsour", "mbdelay"] + phase_column + delay_column + rate_column)
+                sn_df = pd.DataFrame(columns=["t", "antenna", "calsour", "weight", "mbdelay"] + phase_column + delay_column + rate_column)
                 for row_sn in sn_table:
                     no_if = context.get_context()["no_if"]
                     phase = [math.atan2(row_sn.imag1[if_id], row_sn.real1[if_id]) for if_id in range(no_if)]
                     delay = [row_sn.delay_1[if_id] for if_id in range(no_if)]
                     rate = [row_sn.rate_1[if_id] for if_id in range(no_if)]
+                    weight = row_sn.weight_1[0]  # one solution for all IFs by default, so just take the first one
                     mbdelay = row_sn.mbdelay1
-                    sn_df.loc[sn_df.index.size] = [row_sn.time, row_sn.antenna_no, row_sn.source_id, mbdelay] + phase + delay + rate
+                    sn_df.loc[sn_df.index.size] = [row_sn.time, row_sn.antenna_no, row_sn.source_id, weight, mbdelay] + phase + delay + rate
                 sn_path = os.path.join(sn_dir, f"{target['ID']}-{target['NAME']}-SN{calibrator['SN']}.csv")
                 sn_df.to_csv(sn_path, index=False)
                 if self.params.get("manual", False):

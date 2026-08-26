@@ -4,20 +4,32 @@ root window of GUI
 @DATE  : 2024/8/6
 """
 import os
+import queue
+import threading
 import pandas as pd
 import tkinter as tk
-from tkinter import font
+from tkinter import font, messagebox
 import matplotlib.pyplot as plt
 import yaml
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from util.yaml_util import safe_dump_builtin
+from .ProgressWindow import ProgressWindow
+from .solver_config import apply_solver_defaults, solver_kwargs
 
 
 class RootWindow:
+    """Main MV window for one target/antenna pair.
+
+    It owns the saved adjustment/config paths, the compact gradient plot, and
+    the explicit rerun button that drives the long mapped-elevation/AltAz
+    Viterbi-Kalman solve.
+    """
+
     def __init__(self, target, antenna, config):
         self.target = target
         self.antenna = antenna
         self.config = config
+        apply_solver_defaults(self.config)
 
         base_dir = self.config.get("mv_workspace")
         if not base_dir:
@@ -96,11 +108,11 @@ class RootWindow:
         with open(self.conf_dir, 'w') as f:
             safe_dump_builtin(self.config, f)
         self.present_fig.savefig(
-            os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY-VECTOR.png"),
+            os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY-GRADIENT.png"),
             bbox_inches='tight'
         )
         self.present_fig.savefig(
-            os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY-VECTOR.pdf"),
+            os.path.join(self.image_dir, f"{self.target['ID']}-{self.target['NAME']}-{self.antenna.id}-{self.antenna.name}-DELAY-GRADIENT.pdf"),
             bbox_inches='tight'
         )
         self.adjust_window.delay_plot()
@@ -116,6 +128,12 @@ class RootWindow:
         plt.close('all')
 
     def root_normal_vector_plot(self):
+        """Refresh the root-window gradient plot.
+
+        The method name is kept for compatibility with older GUI code; the plot
+        now shows mapped-elevation/AltAz delay gradients, not normal-vector
+        components.
+        """
         if not isinstance(self.antenna.delay_mv_result, dict) or not self.antenna.delay_mv_result:
             return
         if self.present_fig is not None:
@@ -127,23 +145,84 @@ class RootWindow:
         canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
         self.present_fig = fig
 
-    def rerun(self, adjust=True):
-        self.antenna.delay_multiview(
-            self.config['max_depth'], self.config['max_ang_v'], self.config['min_z'],
-            self.config['weight'], self.config['kalman_factor'], self.config['smo_half_window']
-        )
+    def rerun(self, adjust=True, show_progress=True):
+        """Run the solver, optionally showing progress and refreshing windows."""
+        kwargs = solver_kwargs(self.config)
+        if show_progress:
+            self._run_solver_with_progress(kwargs)
+        else:
+            self.antenna.delay_multiview(**kwargs)
         self.root_normal_vector_plot()
         if adjust and self.adjust_window is not None:
             self.adjust_window.delay_plot()
             if getattr(self.adjust_window, "slice_window", None) is not None:
                 self.adjust_window.slice_window.refresh()
 
+    def _run_solver_with_progress(self, kwargs):
+        """Coordinate the solver off-thread while Tk drains progress events."""
+
+        progress_window = ProgressWindow(
+            self.root,
+            self.antenna.delay_if_ids,
+            "MultiView calculation",
+        )
+        event_queue = queue.Queue()
+        finished = tk.BooleanVar(master=self.root, value=False)
+        outcome = {}
+
+        def solver_progress(event):
+            event_queue.put(("progress", event))
+
+        def solve():
+            try:
+                self.antenna.delay_multiview(progress_callback=solver_progress, **kwargs)
+            except BaseException as exc:
+                outcome["error"] = exc
+            finally:
+                event_queue.put(("done", None))
+
+        def poll_events():
+            done = False
+            while True:
+                try:
+                    event_type, payload = event_queue.get_nowait()
+                except queue.Empty:
+                    break
+                if event_type == "progress":
+                    progress_window.handle_event(payload)
+                elif event_type == "done":
+                    done = True
+            if done:
+                progress_window.close()
+                finished.set(True)
+            else:
+                self.root.after(50, poll_events)
+
+        solver_thread = threading.Thread(
+            target=solve,
+            name=f"mv-if-solver-{self.antenna.id}",
+            daemon=True,
+        )
+        solver_thread.start()
+        self.root.after(0, poll_events)
+        self.root.wait_variable(finished)
+        solver_thread.join()
+        if "error" in outcome:
+            messagebox.showerror(
+                "MultiView calculation failed",
+                str(outcome["error"]),
+                parent=self.root,
+            )
+            raise outcome["error"]
+
     def load(self, do_rerun=True):
+        """Load saved manual edits/config and optionally recompute the solution."""
         self.antenna.delay_auto_reset()
         with open(self.conf_dir, 'r') as f:
             config_load = yaml.safe_load(f) or {}
             for key, value in config_load.items():
                 self.config[key] = value
+            apply_solver_defaults(self.config)
         if os.path.isfile(self.delay_adj_dir):
             delay_adjust_load = pd.read_csv(self.delay_adj_dir)
             manual_df = self.antenna.delay_adjust_info.copy(deep=True)

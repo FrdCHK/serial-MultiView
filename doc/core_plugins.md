@@ -42,9 +42,9 @@ These are thin wrappers around AIPSTask. All log start/end and register SN/CL ta
 - `MVCalibratorStructurePrepare`: build calibrator structure models (FRING/CLCAL, SPLIT/FITTP, difmap).
 - `MVPrimaryFringeFitting`: FRING primary calibrator and apply to all sources.
 - `MVSecondaryFringeFitting`: FRING secondary calibrators only.
-- `MVSnExport`: export SN tables for MV.
-- `MVRun`: MultiView GUI workflow.
-- `MVPostProcess`: import MV SN, SPLIT/UVFLG/IMAGR/JMFIT/FITTP, summary.
+- `MVSnExport`: export SN phase, delay, rate, and weight columns for MV.
+- `MVRun`: MultiView GUI workflow. Delay MV uses the primary calibrator as the zero point and solves per-IF mapped-elevation/AltAz delay gradients with optional cosecant elevation mapping and separation-dependent weighting; see `doc/mv_viterbi_kalman_altaz.md`.
+- `MVPostProcess`: import the saved `t, mbdelay` MV delay correction, then SPLIT/UVFLG/IMAGR/JMFIT/FITTP and summary.
 
 ## Self‑cal workflow
 - `SelfcalFringeFitting`: fringe fit targets for self‑cal.

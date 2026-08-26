@@ -6,23 +6,57 @@ class for antennas
 import numpy as np
 import pandas as pd
 import copy
+import ast
 import matplotlib.pyplot as plt
 # import scipy.interpolate as interp
 # import pdb
 from typing import List
 
 from .Calibrator import Calibrator
-from .plane import plane
-from .Node import Node
-from .recursion import recursion
-from .find_min_leaf import find_min_leaf
+from .elevation_mapping import (
+    LINEAR_ELEVATION_MAPPING,
+    elevation_axis_label,
+    elevation_coordinate_label,
+    gradient_axis_label,
+    normalize_elevation_mapping,
+)
+from .delay_parallel import (
+    DelayIfSolveError,
+    DelayIfSolveInput,
+    emit_progress,
+    run_delay_if_tasks,
+    validate_parallel_workers,
+)
+from .viterbi_kalman_altaz import altaz_offsets
 # from .rodrigues_rotation import rodrigues_rotation
 
 
 class Antenna:
-    def __init__(self, antenna_id, antenna_name, data=None, calibrators: List[Calibrator]=None, if_freq=None, no_if=1):
+    def __init__(
+        self,
+        antenna_id,
+        antenna_name,
+        data=None,
+        calibrators: List[Calibrator]=None,
+        if_freq=None,
+        no_if=1,
+        station_xyz=None,
+        obs_jd0=None,
+        primary=None,
+        target=None,
+    ):
         """
-        antenna class for MultiView
+        Antenna-local state for the MultiView GUI and delay solver.
+
+        ``data`` is the per-antenna SN export for secondary calibrators.  Delay
+        columns are named ``d{if_id}``, phase columns ``p{if_id}``, and
+        ``weight`` is the SN weight used to form observation variances.
+
+        ``station_xyz``, ``obs_jd0``, ``primary``, and ``target`` are required
+        by the AltAz solver.  They let each scan use the current station-local
+        mapped elevation/azimuth coordinates instead of static sky-plane
+        coordinates.
+
         :param antenna_id: antenna id
         :param antenna_name: antenna name
         :param data: input time series
@@ -51,6 +85,12 @@ class Antenna:
         self.accu_data = None  # data with flag+wrap+accu adjustment
 
         self.target_pos = None
+        self.station_xyz = None if station_xyz is None else np.asarray(station_xyz, dtype=float)
+        self.obs_jd0 = obs_jd0
+        self.primary = primary
+        self.target = target
+        self._source_by_id = {int(cal.id): cal for cal in self.secondary_calibrators}
+        self.elevation_mapping = "linear"
 
         self.reverse = False
 
@@ -71,14 +111,17 @@ class Antenna:
         self.delay_t_flag_info = []
         self.delay_mv_result = None
         self.delay_mv_t = None
+        self.delay_mv_t_by_if = {}
+        self.delay_fit_info = {}
 
         # how the z axis is scaled for sMV
         max_xy = 0.
         for calibrator in self.secondary_calibrators:
             cal_max_xy = max(abs(calibrator.dx), abs(calibrator.dy))
             max_xy = max_xy if max_xy > cal_max_xy else cal_max_xy
-        max_z = self.data[[f'd{if_id}' for if_id in self.delay_if_ids]].abs().max().max()
-        self.z_scale = max_xy / max_z
+        delay_columns = [f'd{if_id}' for if_id in self.delay_if_ids if f'd{if_id}' in self.data.columns]
+        max_z = self.data[delay_columns].abs().max().max() if delay_columns else 0.
+        self.z_scale = max_xy / max_z if max_z not in (0, None) and np.isfinite(max_z) else 1.0
 
         self.delay_scale = {
             if_id: float(self.if_freq.get(if_id, 1.0)) * 2e9 * np.pi
@@ -111,107 +154,451 @@ class Antenna:
     def _wrap_col(self, if_id):
         return f'w{if_id}'
 
-    def delay_multiview(self, max_depth=4, max_ang_v=864., min_z=0.67, weight=1., kalman_factor=0.08, smo_half_window=None):
-        """
-        Solve total delay per IF independently, then average the solved target delay.
-        """
-        if self.original_data.empty:
-            self.delay_mv_result = {}
-            self.delay_mv_t = np.array([])
-            self.delay_target_if = {}
-            self.delay_average = np.array([])
-            self.delay_average_t = np.array([])
-            return
-        self.delay_auto_reset()
-        self.update_delay_data()
-        if self.data.empty or not self.delay_if_ids:
-            self.delay_mv_result = {}
-            self.delay_mv_t = np.array([])
-            self.delay_target_if = {}
-            self.delay_average = np.array([])
-            self.delay_average_t = np.array([])
-            return
+    @staticmethod
+    def _parse_bool(value):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() in ("1", "true", "yes", "y", "on")
+        return bool(value)
 
-        extend_length = 10
-        delay_results = {}
-        delay_target_if = {}
+    @staticmethod
+    def _parse_optional(value, dtype=float):
+        if value is None:
+            return None
+        if isinstance(value, str) and value.strip().lower() in ("", "none", "null"):
+            return None
+        return dtype(value)
+
+    @staticmethod
+    def _parse_integer_states(value):
+        if isinstance(value, str):
+            if value.strip().lower() in ("", "none", "null"):
+                value = 3
+            else:
+                value = ast.literal_eval(value)
+        if value is None:
+            value = 3
+        if np.isscalar(value):
+            radius = int(value)
+            if radius < 0:
+                raise ValueError("viterbi_integer_states radius must be >= 0.")
+            return list(range(-radius, radius + 1))
+        return [int(item) for item in value]
+
+    @staticmethod
+    def _parse_initial_integer(value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in ("", "none", "null"):
+                return None
+            try:
+                value = ast.literal_eval(value)
+            except (ValueError, SyntaxError):
+                return int(value)
+        if isinstance(value, dict):
+            return {int(key): int(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple, np.ndarray)):
+            return [int(item) for item in value]
+        return int(value)
+
+    @staticmethod
+    def _source_ra_dec(source):
+        if source is None:
+            raise ValueError("Source metadata is not available.")
+        if isinstance(source, dict):
+            return float(source["RA"]), float(source["DEC"])
+        return float(source.ra), float(source.dec)
+
+    def source_altaz_offsets(self, source, times, elevation_mapping=None):
+        """Return primary-relative solver coordinates for a source.
+
+        The offsets are recomputed for each requested scan time because the
+        station AltAz frame changes as the Earth rotates.  The first coordinate
+        follows the selected elevation mapping, while azimuth remains a wrapped
+        degree difference.
+        """
+        if self.primary is None or self.station_xyz is None or self.obs_jd0 is None:
+            raise ValueError("Primary calibrator, station coordinates, and observation JD are required for AltAz MV.")
+        if elevation_mapping is None:
+            elevation_mapping = self.elevation_mapping
+        source_ra, source_dec = self._source_ra_dec(source)
+        primary_ra, primary_dec = self._source_ra_dec(self.primary)
+        return altaz_offsets(
+            source_ra,
+            source_dec,
+            primary_ra,
+            primary_dec,
+            times,
+            self.obs_jd0,
+            self.station_xyz,
+            elevation_mapping=elevation_mapping,
+        )
+
+    def add_altaz_offsets(self, data_in, elevation_mapping=None):
+        """Add per-row solver coordinates and true angular separation.
+
+        ``delta_el`` stores the selected first coordinate, which may be raw
+        cosecant elevation.  ``theta_deg`` is always computed from ordinary
+        linear AltAz offsets so separation-dependent weighting remains tied to
+        real source-primary angular distance.
+        """
+        if elevation_mapping is None:
+            elevation_mapping = self.elevation_mapping
+        data_out = data_in.copy(deep=True)
+        data_out["delta_el"] = np.nan
+        data_out["delta_az"] = np.nan
+        data_out["theta_deg"] = np.nan
+        if data_out.empty:
+            return data_out
+        for calsour in data_out["calsour"].dropna().unique():
+            source = self._source_by_id.get(int(calsour))
+            if source is None:
+                continue
+            mask = data_out["calsour"].astype(int) == int(calsour)
+            offsets = self.source_altaz_offsets(source, data_out.loc[mask, "t"].to_numpy(), elevation_mapping)
+            linear_offsets = offsets
+            if normalize_elevation_mapping(elevation_mapping) != LINEAR_ELEVATION_MAPPING:
+                # The solver coordinate may be non-linear, but reliability
+                # weighting should use true angular separation in degrees.
+                linear_offsets = self.source_altaz_offsets(
+                    source,
+                    data_out.loc[mask, "t"].to_numpy(),
+                    LINEAR_ELEVATION_MAPPING,
+                )
+            data_out.loc[mask, ["delta_el", "delta_az"]] = offsets
+            data_out.loc[mask, "theta_deg"] = np.hypot(linear_offsets[:, 0], linear_offsets[:, 1])
+        return data_out
+
+    def elevation_axis_label(self):
+        """Return the first-coordinate label for plots."""
+        return elevation_axis_label(self.elevation_mapping)
+
+    @staticmethod
+    def effective_delay_variance(unit_weight_variance, weight, theta_deg, separation_noise=0.0):
+        """Observation variance including optional separation-dependent noise.
+
+        Formula:
+
+            unit_weight_variance * (1 / weight + (separation_noise * theta_deg)^2)
+
+        ``separation_noise`` is unitless relative to ``unit_weight_variance``;
+        setting it to zero recovers the previous SN-weight-only variance.
+        """
+        separation_noise = float(separation_noise)
+        if separation_noise < 0.0:
+            raise ValueError("separation_noise must be >= 0.")
+        return float(unit_weight_variance) * (
+            1.0 / np.asarray(weight, dtype=float)
+            + (separation_noise * np.asarray(theta_deg, dtype=float)) ** 2
+        )
+
+    def delay_multiview(
+        self,
+        kalman_factor=1.0e-14,
+        unit_weight_variance=4.0e-22,
+        rts_smoothing=True,
+        viterbi_integer_states=3,
+        viterbi_max_jump=1,
+        viterbi_jump_penalty=25.0,
+        viterbi_robust=True,
+        viterbi_huber_c=3.0,
+        viterbi_z_out=4.0,
+        viterbi_max_outlier_iterations=2,
+        viterbi_fix_initial_integer=0,
+        viterbi_p0_gradient=None,
+        elevation_mapping="linear",
+        separation_noise=0.0,
+        parallel_workers=0,
+        progress_callback=None,
+    ):
+        """
+        Solve delay MultiView gradients independently for each IF.
+
+        The primary calibrator is the zero point.  For each secondary-calibrator
+        row and IF, this method builds a total-delay observable in seconds,
+        computes current primary-relative mapped-elevation/AltAz coordinates,
+        and calls the Viterbi-Kalman solver for the state
+
+            [grad_el, grad_az, rate_grad_el, rate_grad_az].
+
+        The scalar observation variance is built from SN weight plus an optional
+        separation-dependent term based on true linear angular separation.
+        ``unit_weight_variance`` is kept fixed by ``solver_config`` because only
+        relative weights matter for the current exported MV delay.  The
+        ambiguity spacing is one IF phase wrap, ``1 / if_freq_hz``.
+
+        The returned gradients are evaluated at the target AltAz offset for the
+        same times, then the IF-specific target delays are interpolated to the
+        first valid IF and averaged.  IF workers return immutable results; this
+        object is updated only after every worker and final aggregation succeed.
+        """
         for if_id in self.delay_if_ids:
-            self.update_delay_data(if_id)
-            data_extended = self._get_extended_delay_data(extend_length)
-            data_extended_corrected = self._correct_delay_with_phase(data_extended, if_id)
-            data_view = data_extended_corrected[['calsour', 'x', 'y', 't', 'total_delay']].copy(deep=True)
-            data_view['total_delay'] = data_view['total_delay'] * self.z_scale  # for numerical stability
+            emit_progress(progress_callback, "if_state", if_id=if_id, state="queued")
+        emit_progress(
+            progress_callback,
+            "global_state",
+            state="preparing",
+            message="Preparing IF observations",
+        )
+        try:
+            parallel_workers = validate_parallel_workers(parallel_workers)
+            kalman_factor = float(kalman_factor)
+            unit_weight_variance = float(unit_weight_variance)
+            if unit_weight_variance <= 0.0:
+                raise ValueError("unit_weight_variance must be positive.")
+            rts_smoothing = self._parse_bool(rts_smoothing)
+            viterbi_integer_states = self._parse_integer_states(viterbi_integer_states)
+            viterbi_max_jump = int(viterbi_max_jump)
+            viterbi_jump_penalty = float(viterbi_jump_penalty)
+            viterbi_robust = self._parse_bool(viterbi_robust)
+            viterbi_huber_c = float(viterbi_huber_c)
+            viterbi_z_out = float(viterbi_z_out)
+            viterbi_max_outlier_iterations = int(viterbi_max_outlier_iterations)
+            viterbi_fix_initial_integer = self._parse_initial_integer(viterbi_fix_initial_integer)
+            viterbi_p0_gradient = self._parse_optional(viterbi_p0_gradient, float)
+            mapping = normalize_elevation_mapping(elevation_mapping)
+            separation_noise = float(separation_noise)
+            if separation_noise < 0.0:
+                raise ValueError("separation_noise must be >= 0.")
 
-            norm_vec = np.array([[0], [0], [1]])
-            result = []
-            root_node = Node({'prune': False, 'position': -1, 'action': 0, 'angle': 0, 'total': 0, 'norm': np.zeros((3, 1))})
-            calsour = data_view['calsour'].unique()
-            accu = {sour: 0. for sour in calsour}
-            z_lim = min_z
-            ang_v = max_ang_v
-            n = 3
-            A = np.eye(n)
-            H = np.eye(n)
-            Q = np.eye(n) * kalman_factor
-            R = np.eye(n) * 0.1
-            x_hat = np.zeros((n, 1))
-            P = np.eye(n)
-            for i in range(data_view.index.size):
-                calsour_this = data_view.loc[i, 'calsour']
-                freq = self.if_freq.get(if_id, 1.0) * 1e9 / self.z_scale  # here scale the freq
-                root_node.current = recursion(data_view, i, max_depth, norm_vec, accu, 0, ang_v, root_node, freq, z_lim)
-                root_node.plus = recursion(data_view, i, max_depth, norm_vec, accu, 1, ang_v, root_node, freq, z_lim)
-                root_node.minus = recursion(data_view, i, max_depth, norm_vec, accu, -1, ang_v, root_node, freq, z_lim)
-                norm_series = None
-                if i > 8:
-                    norm_series = np.zeros((i, 4))
-                    norm_series[:, 0] = data_view.loc[:i - 1, 't']
-                    norm_series[:, 1:] = np.array(result)
-                    norm_series = norm_series[-9:, :]
-                min_node, min_path = find_min_leaf(norm_series, data_view['t'], i, root_node, norm_vec, weight, (max_depth, max_ang_v, min_z))
-                if min_node is None:
-                    result.append(norm_vec.flatten())
-                    root_node = Node({'prune': False, 'position': i, 'action': 0, 'angle': 0, 'total': 0, 'norm': norm_vec})
-                    continue
-                selected_next = min_path[1]
-                accu[calsour_this] += selected_next['action'] / freq
-                
-                # update self.data
-                if i >= extend_length and abs(selected_next['action']) > 1e-10:
-                    self.delay_wrap(
-                        [data_view.loc[i, 't'] - 1e-8, data_view.loc[data_view.index.size - 1, 't'] + 1e-8],
-                        [calsour_this],
-                        if_id,
-                        '+' if selected_next['action'] > 0 else '-',
-                        source='auto',
-                    )
+            tasks = []
+            skipped_if_ids = []
+            if not self.original_data.empty and self.delay_if_ids:
+                base_data = self._prepare_delay_base_data(mapping)
+                for if_num, if_id in enumerate(self.delay_if_ids):
+                    emit_progress(progress_callback, "if_state", if_id=if_id, state="preparing")
+                    try:
+                        task = self._prepare_delay_if_task(
+                            base_data,
+                            if_id,
+                            kalman_factor=kalman_factor,
+                            unit_weight_variance=unit_weight_variance,
+                            rts_smoothing=rts_smoothing,
+                            viterbi_integer_states=viterbi_integer_states,
+                            viterbi_max_jump=viterbi_max_jump,
+                            viterbi_jump_penalty=viterbi_jump_penalty,
+                            viterbi_robust=viterbi_robust,
+                            viterbi_huber_c=viterbi_huber_c,
+                            viterbi_z_out=viterbi_z_out,
+                            viterbi_max_outlier_iterations=viterbi_max_outlier_iterations,
+                            viterbi_fix_initial_integer=viterbi_fix_initial_integer,
+                            viterbi_p0_gradient=viterbi_p0_gradient,
+                            separation_noise=separation_noise,
+                        )
+                    except BaseException as exc:
+                        emit_progress(
+                            progress_callback,
+                            "if_state",
+                            if_id=if_id,
+                            state="failed",
+                            message=str(exc),
+                        )
+                        for task_pending in tasks:
+                            emit_progress(
+                                progress_callback,
+                                "if_state",
+                                if_id=task_pending.if_id,
+                                state="cancelled",
+                            )
+                        for remaining_if in self.delay_if_ids[if_num + 1:]:
+                            emit_progress(
+                                progress_callback,
+                                "if_state",
+                                if_id=remaining_if,
+                                state="cancelled",
+                            )
+                        raise DelayIfSolveError(if_id, exc) from exc
+                    if task is None:
+                        skipped_if_ids.append(if_id)
+                        emit_progress(progress_callback, "if_state", if_id=if_id, state="skipped")
+                    else:
+                        tasks.append(task)
+                        emit_progress(progress_callback, "if_state", if_id=if_id, state="queued")
+            else:
+                skipped_if_ids = list(self.delay_if_ids)
+                for if_id in skipped_if_ids:
+                    emit_progress(progress_callback, "if_state", if_id=if_id, state="skipped")
 
-                x_hat = A @ x_hat
-                P = A @ P @ A.T + Q
-                K = P @ H.T @ np.linalg.inv(H @ P @ H.T + R)
-                x_hat = x_hat + K @ (selected_next['norm'] - H @ x_hat)
-                P = (np.eye(n) - K @ H) @ P
-                new_norm = x_hat
-                result.append(new_norm.flatten())
-                root_node = Node(selected_next)
-                root_node.data['norm'] = new_norm
-                norm_vec = new_norm
+            emit_progress(
+                progress_callback,
+                "global_state",
+                state="solving",
+                message="Solving IFs in parallel",
+            )
+            result_by_if = run_delay_if_tasks(tasks, parallel_workers, progress_callback)
+            emit_progress(
+                progress_callback,
+                "global_state",
+                state="combining",
+                message="Combining IF solutions",
+            )
+            self._commit_delay_solution(mapping, result_by_if, skipped_if_ids)
+        except BaseException as exc:
+            emit_progress(
+                progress_callback,
+                "global_state",
+                state="failed",
+                message=str(exc),
+            )
+            raise
+        emit_progress(
+            progress_callback,
+            "global_state",
+            state="complete",
+            message="Calculation complete",
+        )
 
-            mv_res = np.array(result[extend_length:])
-            delay_results[if_id] = mv_res
-            delay_target_if[if_id] = np.array([])
+    def _prepare_delay_base_data(self, elevation_mapping):
+        """Return source/time coordinates shared by every IF preparation."""
 
+        base_data = self.original_data.copy(deep=True)
+        base_data["_orig_index"] = base_data.index
+        if "weight" not in base_data.columns:
+            base_data["weight"] = 1.0
+        coordinate_data = self.add_altaz_offsets(
+            base_data[["calsour", "t", "_orig_index"]],
+            elevation_mapping,
+        )
+        base_data[["delta_el", "delta_az", "theta_deg"]] = coordinate_data[
+            ["delta_el", "delta_az", "theta_deg"]
+        ].to_numpy()
+        return base_data
+
+    def _prepare_delay_if_task(
+        self,
+        base_data,
+        if_id,
+        kalman_factor,
+        unit_weight_variance,
+        rts_smoothing,
+        viterbi_integer_states,
+        viterbi_max_jump,
+        viterbi_jump_penalty,
+        viterbi_robust,
+        viterbi_huber_c,
+        viterbi_z_out,
+        viterbi_max_outlier_iterations,
+        viterbi_fix_initial_integer,
+        viterbi_p0_gradient,
+        separation_noise,
+    ):
+        """Build one IF's immutable worker payload from manual edits only."""
+
+        flag_col = self._flag_col(if_id)
+        wrap_col = self._wrap_col(if_id)
+        delay_col = f"d{if_id}"
+        phase_col = f"p{if_id}"
+        missing = [column for column in (flag_col, wrap_col) if column not in self.delay_adjust_info.columns]
+        missing.extend(column for column in (delay_col, phase_col) if column not in base_data.columns)
+        if missing:
+            raise KeyError(f"Missing IF{if_id + 1} columns: {', '.join(missing)}")
+
+        unflagged = self.delay_adjust_info[flag_col].astype(int) == 0
+        data_if = base_data.loc[unflagged].copy(deep=True)
+        if data_if.empty:
+            return None
+        wrap_step = 1.0 / (self.if_freq.get(if_id, 1.0) * 1e9)
+        data_if[delay_col] += (
+            self.delay_adjust_info.loc[unflagged, wrap_col].to_numpy(dtype=int) * wrap_step
+        )
+        data_if = self._correct_delay_with_phase(data_if, if_id)
+        finite = (
+            np.isfinite(data_if["total_delay"].to_numpy(dtype=float))
+            & np.isfinite(data_if["weight"].to_numpy(dtype=float))
+            & (data_if["weight"].to_numpy(dtype=float) > 0.0)
+            & np.isfinite(data_if["delta_el"].to_numpy(dtype=float))
+            & np.isfinite(data_if["delta_az"].to_numpy(dtype=float))
+            & np.isfinite(data_if["theta_deg"].to_numpy(dtype=float))
+        )
+        data_if = data_if.loc[finite].copy(deep=True)
+        if data_if.empty:
+            return None
+        data_solve = data_if.iloc[::-1].copy(deep=True) if self.reverse else data_if
+        variance = self.effective_delay_variance(
+            unit_weight_variance,
+            data_solve["weight"].to_numpy(dtype=float),
+            data_solve["theta_deg"].to_numpy(dtype=float),
+            separation_noise,
+        )
+        return DelayIfSolveInput(
+            if_id=if_id,
+            t=data_solve["t"].to_numpy(dtype=float),
+            source_id=data_solve["calsour"].to_numpy(dtype=int),
+            delta_el=data_solve["delta_el"].to_numpy(dtype=float),
+            delta_az=data_solve["delta_az"].to_numpy(dtype=float),
+            delay=data_solve["total_delay"].to_numpy(dtype=float),
+            variance=variance,
+            orig_index=data_solve["_orig_index"].to_numpy(dtype=int),
+            kalman_factor=kalman_factor,
+            ambiguity_spacing=wrap_step,
+            integer_states=tuple(viterbi_integer_states),
+            max_jump=viterbi_max_jump,
+            jump_penalty=viterbi_jump_penalty,
+            robust=viterbi_robust,
+            huber_c=viterbi_huber_c,
+            z_out=viterbi_z_out,
+            max_outlier_iterations=viterbi_max_outlier_iterations,
+            fix_initial_integer=viterbi_fix_initial_integer,
+            p0_gradient=viterbi_p0_gradient,
+            rts_smoothing=rts_smoothing,
+            reverse=self.reverse,
+        )
+
+    def _commit_delay_solution(self, elevation_mapping, result_by_if, skipped_if_ids):
+        """Atomically publish staged IF results and their combined correction."""
+
+        skipped = set(skipped_if_ids)
+        delay_results = {}
+        delay_t_by_if = {}
+        fit_info = {}
+        auto_adjust = self.delay_auto_adjust_info.copy(deep=True)
+        auto_adjust.iloc[:, :] = 0
+        for if_id in self.delay_if_ids:
+            result = result_by_if.get(if_id)
+            if result is None:
+                if if_id not in skipped:
+                    raise RuntimeError(f"No staged result for IF{if_id + 1}.")
+                delay_results[if_id] = np.empty((0, 4))
+                delay_t_by_if[if_id] = np.array([])
+                continue
+            delay_results[if_id] = result.state
+            delay_t_by_if[if_id] = result.t
+            fit_info[if_id] = {
+                "integer_path": result.integer_path,
+                "orig_index": result.orig_index,
+                "outlier_mask": result.outlier_mask,
+                "standardized_residual": result.standardized_residual,
+            }
+            auto_adjust.loc[result.orig_index, self._wrap_col(if_id)] = result.integer_path.astype(int)
+            outlier_orig_index = result.orig_index[np.asarray(result.outlier_mask, dtype=bool)]
+            if outlier_orig_index.size > 0:
+                auto_adjust.loc[outlier_orig_index, self._flag_col(if_id)] = 1
+
+        first_if = next(
+            (if_id for if_id in self.delay_if_ids if delay_t_by_if[if_id].size > 0),
+            None,
+        )
+        delay_mv_t = delay_t_by_if[first_if] if first_if is not None else np.array([])
+        delay_target_if, delay_average, delay_average_t = self._calculate_delay_target_series(
+            delay_results,
+            delay_t_by_if,
+            delay_mv_t,
+            elevation_mapping,
+        )
+
+        self.elevation_mapping = elevation_mapping
+        self.delay_auto_adjust_info = auto_adjust
         self.delay_mv_result = delay_results
-        if self.reverse and self.data.index.size > 0:
-            self.delay_mv_t = -(np.array(data_extended['t'])[extend_length:] - 2 * self.data['t'].iloc[-1])
-        else:
-            self.delay_mv_t = np.array(data_extended['t'])[extend_length:]
+        self.delay_mv_t_by_if = delay_t_by_if
+        self.delay_fit_info = fit_info
+        self.delay_mv_t = delay_mv_t
         self.delay_target_if = delay_target_if
-
-        if smo_half_window is not None and smo_half_window > 0:
-            self._lowpass_filter_delay(smo_half_window)
-
-        self._refresh_delay_target_series()
+        self.delay_average = delay_average
+        self.delay_average_t = delay_average_t
+        self.update_delay_data(self.delay_if_ids[0] if self.delay_if_ids else 0)
 
     def delay_flag(self, timerange, calibrators, mode='flag'):
         return self.delay_flag_if(timerange, calibrators, 0, mode)
@@ -333,7 +720,11 @@ class Antenna:
         fig.subplots_adjust(left=0.05, right=0.95, top=0.98, bottom=0.12)
 
         if if_id in self.delay_target_if and self.delay_target_if[if_id].size > 0:
-            ax.plot(self.delay_mv_t, self.delay_target_if[if_id] * 1e12, 'x', color='k', ls='', label='Target')
+            target_t = np.asarray(self.delay_mv_t_by_if.get(if_id, self.delay_mv_t), dtype=float)
+            target_delay = np.asarray(self.delay_target_if[if_id], dtype=float)
+            n_plot = min(target_t.size, target_delay.size)
+            if n_plot > 0:
+                ax.plot(target_t[:n_plot], target_delay[:n_plot] * 1e12, 'x', color='k', ls='', label='Target')
 
         for i, item in enumerate(self.secondary_calibrators):
             plot_data = self.data.copy(deep=True)
@@ -342,7 +733,10 @@ class Antenna:
             if not plot_data.empty:
                 ax.plot(plot_data['t'], plot_data["total_delay"] * 1e12, ls='none', marker=markers[i], c=self.colors[i], label=item.name)
 
-        flagged_index = self.delay_adjust_info[self._flag_col(if_id)] == 1
+        flag_col = self._flag_col(if_id)
+        flagged_index = self.delay_adjust_info[flag_col] == 1
+        if flag_col in self.delay_auto_adjust_info.columns:
+            flagged_index = flagged_index | (self.delay_auto_adjust_info[flag_col] == 1)
         flagged_data = self.original_data.loc[flagged_index].copy(deep=True)
         flagged_data.reset_index(drop=True, inplace=True)
         for i, item in enumerate(self.secondary_calibrators):
@@ -394,6 +788,7 @@ class Antenna:
         self.data = self.original_data.copy(deep=True)
         if self.data.empty:
             return
+        self.data["_orig_index"] = self.data.index
         flag_col = self._flag_col(if_id)
         wrap_col = self._wrap_col(if_id)
         if flag_col not in self.delay_adjust_info.columns or wrap_col not in self.delay_adjust_info.columns:
@@ -420,79 +815,94 @@ class Antenna:
         self.data = self.data.loc[non_flagged_index]
         self.data.reset_index(drop=True, inplace=True)
 
-    def _get_extended_delay_data(self, extend_length=10):
-        data_extended = self.data.copy(deep=True)
-        if data_extended.index.size == 0 or extend_length <= 0:
-            return data_extended
-        data_rev = data_extended.iloc[::-1, :].copy(deep=True)
-        t = data_extended['t'].copy(deep=True)
-        if self.reverse:
-            data_rev['t'] = -t + 2 * t.iloc[-1]
-            data_extended = pd.concat([data_extended.iloc[-(extend_length + 1):-1], data_rev], axis=0)
-        else:
-            data_rev['t'] = -t + 2 * t.iloc[0]
-            data_extended = pd.concat([data_rev.iloc[-(extend_length + 1):-1], data_extended], axis=0)
-        data_extended.reset_index(drop=True, inplace=True)
-        return data_extended
-
-    def _lowpass_filter_delay(self, smo_half_window=5):
-        if not isinstance(self.delay_mv_result, dict):
-            return
-        mv_data = {k: copy.deepcopy(v) for k, v in self.delay_mv_result.items()}
-        mv_t = np.array(self.data.loc[:, 't'])
-        mv_smo = {k: copy.deepcopy(v) for k, v in mv_data.items()}
-        for if_id, arr in mv_data.items():
-            for i in range(1, arr.shape[0] - 1):
-                if i < smo_half_window:
-                    smo_window_i = i
-                elif i >= arr.shape[0] - smo_half_window:
-                    smo_window_i = arr.shape[0] - 1 - i
-                else:
-                    smo_window_i = smo_half_window
-                dt = np.abs(mv_t[i] - mv_t[i - smo_window_i:i + smo_window_i + 1])
-                dt[dt == 0] = np.min(dt[dt != 0]) / np.e
-                weights = np.log(1.0 / dt)
-                weights[np.isinf(weights)] = np.max(weights[~np.isinf(weights)])
-                normalized_weights = (weights / np.sum(weights)).reshape(smo_window_i * 2 + 1, 1)
-                mv_smo[if_id][i] = np.sum(normalized_weights * arr[i - smo_window_i:i + smo_window_i + 1], axis=0)
-        self.delay_mv_result = mv_smo
-        self._refresh_delay_target_series()
-
     def plot_delay_normal_vector(self, if_id=None):
+        """Plot the fitted mapped-elevation/AltAz delay gradients.
+
+        The historical method name is retained because several GUI classes call
+        it, but the plotted quantity is no longer a 3D normal vector.
+        """
         if if_id is None:
             if_id = self.delay_if_ids[0] if self.delay_if_ids else 0
         if if_id not in self.delay_mv_result:
             return plt.figure(figsize=(8, 4))
-        linestyles = ['-', '--', ':']
-        fig, ax = plt.subplots(1, 1, figsize=(8, 4))
-        fig.subplots_adjust(left=0.07, right=0.98, top=0.98, bottom=0.1)
-        for i in range(self.delay_mv_result[if_id].shape[1]):
-            ax.plot(self.delay_mv_t, self.delay_mv_result[if_id][:, i], ls=linestyles[i], label=chr(120 + i))
-        ax.legend()
+        mv_t = self.delay_mv_t_by_if.get(if_id, self.delay_mv_t)
+        if mv_t is None or len(mv_t) == 0:
+            return plt.figure(figsize=(8, 4))
+        fig, ax = plt.subplots(1, 1, figsize=(5.0, 3.6))
+        fig.subplots_adjust(left=0.24, right=0.96, top=0.88, bottom=0.20)
+        mv = self.delay_mv_result[if_id]
+        n_plot = min(len(mv_t), len(mv))
+        mv_t = np.asarray(mv_t, dtype=float)[:n_plot]
+        mv = mv[:n_plot]
+        grad_labels = [elevation_coordinate_label(self.elevation_mapping), "azimuth"]
+        for i in range(min(2, mv.shape[1])):
+            ax.plot(mv_t, mv[:, i] * 1e12, ls=['-', '--'][i], label=grad_labels[i])
         ax.set_xlabel("time (day)")
-        ax.set_title(f"Delay Normal Vector (IF{if_id + 1})")
+        ax.set_ylabel(gradient_axis_label(self.elevation_mapping))
+        ax.legend()
+        ax.set_title(f"Mapped AltAz Delay Gradients (IF{if_id + 1})")
         return fig
 
     def _refresh_delay_target_series(self):
-        if self.target_pos is None:
+        """Evaluate fitted gradients at the target position and average IFs."""
+        if not isinstance(self.delay_mv_result, dict):
             self.delay_average = np.array([])
             self.delay_average_t = np.array([])
             return
-        refreshed = {}
-        for if_id, mv_res in self.delay_mv_result.items():
-            refreshed[if_id] = np.array(
-                [plane(*mv_res[i], *self.target_pos) / self.z_scale for i in range(mv_res.shape[0])]
-            ) if mv_res.size > 0 else np.array([])
+        refreshed, delay_average, delay_average_t = self._calculate_delay_target_series(
+            self.delay_mv_result,
+            self.delay_mv_t_by_if,
+            self.delay_mv_t,
+            self.elevation_mapping,
+        )
         self.delay_target_if = refreshed
-        valid = [arr for arr in self.delay_target_if.values() if arr.size > 0]
-        if valid:
-            self.delay_average = np.mean(np.vstack(valid), axis=0)
-            self.delay_average_t = np.array(self.delay_mv_t)
-        else:
-            self.delay_average = np.array([])
-            self.delay_average_t = np.array([])
+        self.delay_average = delay_average
+        self.delay_average_t = delay_average_t
+
+    def _calculate_delay_target_series(
+        self,
+        delay_results,
+        delay_t_by_if,
+        delay_mv_t,
+        elevation_mapping,
+    ):
+        """Calculate per-IF target delays and their deterministic average."""
+
+        refreshed = {}
+        for if_id, mv_res in delay_results.items():
+            times_raw = delay_t_by_if.get(if_id, delay_mv_t)
+            if mv_res.size == 0 or times_raw is None or len(times_raw) == 0 or self.target is None:
+                refreshed[if_id] = np.array([])
+                continue
+            times = np.asarray(times_raw, dtype=float)
+            n_target = min(len(times), len(mv_res))
+            target_offsets = self.source_altaz_offsets(
+                self.target,
+                times[:n_target],
+                elevation_mapping,
+            )
+            refreshed[if_id] = np.sum(mv_res[:n_target, :2] * target_offsets, axis=1)
+        valid_items = [(if_id, arr) for if_id, arr in refreshed.items() if arr.size > 0]
+        if valid_items:
+            base_if, base_arr = valid_items[0]
+            base_t = np.asarray(delay_t_by_if.get(base_if, delay_mv_t), dtype=float)
+            aligned = [base_arr]
+            for if_id, arr in valid_items[1:]:
+                this_t = np.asarray(delay_t_by_if.get(if_id, delay_mv_t), dtype=float)
+                if arr.size == base_arr.size and np.allclose(this_t, base_t):
+                    aligned.append(arr)
+                else:
+                    aligned.append(np.interp(base_t, this_t, arr))
+            return refreshed, np.mean(np.vstack(aligned), axis=0), base_t
+        return refreshed, np.array([]), np.array([])
     
     def _correct_delay_with_phase(self, data_in, if_id):
+        """Build a phase-consistent total-delay observable for one IF.
+
+        The SN delay remains in seconds.  ``delay_scale`` converts between delay
+        and phase at the IF frequency so that the exported phase residual can
+        choose the phase-consistent delay branch before ambiguity search.
+        """
         scale = self.delay_scale.get(if_id, 1.0)
         phase_of_delay = (-data_in[f"d{if_id}"] * scale + np.pi) % (2 * np.pi) - np.pi
         delta_phase = data_in[f"p{if_id}"] - phase_of_delay

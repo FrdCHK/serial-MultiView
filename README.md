@@ -5,7 +5,7 @@
 This repo is under active development. For a stable legacy workflow, use the legacy branch of the original repo.
 
 ## What this repo is
-A modular VLBI pipeline framework with a focus on serial MultiView (sMV) phase plane estimation. The core idea is:
+A modular VLBI pipeline framework with a focus on serial MultiView (sMV) phase plane estimation. The current delay-MV implementation fits station-local mapped-elevation/AltAz delay gradients with a Viterbi-Kalman/RTS solver, optional cosecant elevation mapping, and optional separation-dependent weighting. The core idea is:
 - Calibrate and prepare data with AIPS/ParselTongue tasks.
 - Use MultiView to estimate a phase plane from multiple calibrators.
 - Apply the MultiView solution and produce PR/MV images and statistics.
@@ -58,3 +58,4 @@ If you want more details about AIPS tasks, use the NRAO help pages:
 - `doc/framework.md`: pipeline framework overview
 - `doc/custom_plugin.md`: how to develop custom plugins
 - `doc/core_plugins.md`: core plugin catalog (by category)
+- `doc/mv_viterbi_kalman_altaz.md`: current sMV mapped-elevation/AltAz Viterbi-Kalman delay model and implementation notes

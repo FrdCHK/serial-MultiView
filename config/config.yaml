@@ -8,14 +8,16 @@ ionex_dir: your ionex map file directory
 auto_ref_ant: determine reference antenna automatically for VLBA. True or False
 ref_ant: two-charactor antenna code, e.g, PT
 predef_source_list: your pre-defined source list. context file of previous sessions can be used
-max_depth: 5
-max_ang_v: 700.0
-min_z: 0.7
-kalman_factor: 0.08
-smo_half_window: 5
-delay_smo_half_window: 5
-delay_kalman_factor: 0.08
-weight: 0.4
+kalman_factor: 1.0e-14
+rts_smoothing: True
+elevation_mapping: linear
+separation_noise: 0.0
+parallel_workers: 0
+integer_states: 3
+max_jump: 1
+jump_penalty: 25.0
+huber_c: 3.0
+z_out: 4.0
 cellsize: 0.0005
 imsize: 128
 niter: 500
