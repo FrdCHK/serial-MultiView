@@ -4,7 +4,7 @@
 
 ## Note
 
-This repo is under active development. For a stable legacy workflow, use the legacy branch of the original repo.
+This repo is under active development. For fewer bugs, use the stable released version.
 
 ## What this repo is
 
