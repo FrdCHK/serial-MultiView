@@ -1,9 +1,10 @@
 # Mapped-Elevation AltAz Viterbi-Kalman MultiView
 
 This document describes the current serial MultiView workflow in
-`plugin/core/mv`.  It replaces the older recursive normal-vector solver with
-independent per-IF Viterbi-Kalman solvers in station-local
-mapped-elevation/AltAz coordinates.
+`plugin/core/mv`. Here, serial MultiView names the observing/analysis method;
+independent IF solutions can execute concurrently. The implementation replaces
+the older recursive normal-vector solver with per-IF Viterbi-Kalman solvers in
+station-local mapped-elevation/AltAz coordinates.
 
 ## Scope
 
@@ -198,9 +199,10 @@ IF remains serial because Viterbi transitions, forward filtering, and RTS
 smoothing depend on adjacent times.  Station/source AltAz coordinates are
 prepared once and reused while building the IF-specific observables.
 
-The worker limit is controlled by `parallel_workers`.  `0` selects
-`min(valid_IF_count, CPU_count)`; a positive value is an explicit cap.  A
-single effective worker runs inline without process-start overhead.  Empty IFs
+The worker limit is controlled by `parallel_workers`. `0` selects
+`min(valid_IF_count, os.cpu_count() or 1)`; a positive value is an explicit cap
+bounded by the valid IF count. Negative and non-integer values are rejected. A
+single effective worker runs inline without process-start overhead. Empty IFs
 are skipped normally.
 
 Each worker returns arrays without modifying `Antenna`.  Automatic wraps,
@@ -215,20 +217,25 @@ order.
 These keys appear in `config/config.yaml`, the sMV templates, and the GUI config
 window:
 
-- `kalman_factor`: process-noise scale `q` for gradient/rate evolution.
+- `kalman_factor`: process-noise scale `q` for gradient/rate evolution; default
+  `1.0e-14`.
 - `rts_smoothing`: enable the RTS backward smoother after the forward Kalman
-  pass.
+  pass; default `true`.
 - `elevation_mapping`: `linear` or `cosecant`; invalid strings fall back to
-  `linear`.
+  `linear`, which is also the default.
 - `separation_noise`: unitless angular-separation noise coefficient; default
   `0.0` preserves the old SN-weight-only variance.
 - `parallel_workers`: simultaneous IF solver processes; `0` uses the automatic
   CPU-aware limit and positive integers set an explicit cap.
-- `integer_states`: integer search radius `n`, expanded to `[-n, ..., n]`.
-- `max_jump`: maximum ambiguity-integer change allowed for one calibrator step.
-- `jump_penalty`: fixed Viterbi cost added when an ambiguity integer changes.
-- `huber_c`: Huber threshold in standardized-residual units.
-- `z_out`: automatic outlier threshold in standardized-residual units.
+- `integer_states`: integer search radius `n`, expanded to `[-n, ..., n]`;
+  default `3`.
+- `max_jump`: maximum ambiguity-integer change allowed for one calibrator step;
+  default `1`.
+- `jump_penalty`: fixed Viterbi cost added when an ambiguity integer changes;
+  default `25.0`.
+- `huber_c`: Huber threshold in standardized-residual units; default `3.0`.
+- `z_out`: automatic outlier threshold in standardized-residual units; default
+  `4.0`.
 
 These controls are fixed in `plugin/core/mv/solver_config.py`:
 
@@ -238,7 +245,17 @@ These controls are fixed in `plugin/core/mv/solver_config.py`:
 - automatic initial covariance scale
 
 Older input and saved configs containing `viterbi_*` keys are migrated to the
-current public names before control rendering and when loaded.
+current public names before control rendering and when loaded. The mappings are
+`viterbi_integer_states` to `integer_states`, `viterbi_max_jump` to `max_jump`,
+`viterbi_jump_penalty` to `jump_penalty`, `viterbi_huber_c` to `huber_c`, and
+`viterbi_z_out` to `z_out`; the legacy initial-ambiguity keys are migrated in
+the same way. A populated current key wins over its legacy alias.
+
+## Algorithm Schematics
+
+- [Compact control-flow overview](viterbi_kalman_rts_overview.pdf) for one IF.
+- [Implementation-level flow](viterbi_kalman_rts_detailed.pdf) for the Viterbi,
+  Kalman, outlier-refit, and RTS calculation within one IF.
 
 ## Implementation Map
 
@@ -274,12 +291,15 @@ does not automatically rerun the solver.  Manual flagging, wrapping, reset,
 launching a solve.  Press `rerun` in the root window when you want the current
 edits and parameters to be used.
 
-During first run and rerun, the modal progress dialog shows one status row per
-IF plus an aggregate completed-IF bar.  IFs can move through queued, preparing,
-running, complete, skipped, failed, or cancelled states in any order.  Tk polls
-structured solver events on its own thread, so the window stays responsive
-while worker processes solve IFs.  After all valid IFs complete, the dialog
-reports target-correction combination and closes automatically.
+During first run and rerun, the modal, non-cancellable progress dialog shows one
+status row per IF plus an aggregate completed-IF bar. IFs can move through
+queued, preparing, running, complete, skipped, failed, or cancelled states in
+any order. A coordinator thread sends structured events through a thread-safe
+queue, and `root.after(...)` drains that queue on the Tk main thread. Worker
+processes and the coordinator never call Tk. After all valid IFs complete, the
+dialog reports target-correction combination and closes automatically. On
+failure it closes, reports the failing IF, and does not refresh plots from
+partial results.
 
 The 3D slice window visualizes the fitted plane at the selected time range as
 `delay = grad_el * x_el + grad_az * delta_az`.  X and Y keep their independent
